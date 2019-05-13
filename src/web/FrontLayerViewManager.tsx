@@ -11,9 +11,10 @@ import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 
 import { Types } from '../common/Interfaces';
+import Timers from '../common/utils/Timers';
+
 import MouseResponder from './utils/MouseResponder';
 import { PopupDescriptor, RootView } from './RootView';
-import Timers from '../common/utils/Timers';
 
 const MAX_CACHED_POPUPS = 4;
 
@@ -114,7 +115,7 @@ export class FrontLayerViewManager {
         this._activePopupShowDelay = showDelay || 0;
 
         if (this._popupShowDelayTimer) {
-            clearTimeout(this._popupShowDelayTimer);
+            Timers.clearTimeout(this._popupShowDelayTimer);
             this._popupShowDelayTimer = undefined;
         }
         if (this._activePopupShowDelay > 0) {
@@ -137,7 +138,7 @@ export class FrontLayerViewManager {
     autoDismissPopup(popupId: string, dismissDelay?: number): void {
         if (popupId === this._activePopupId && this._activePopupOptions) {
             if (this._popupShowDelayTimer) {
-                clearTimeout(this._popupShowDelayTimer);
+                Timers.clearTimeout(this._popupShowDelayTimer);
                 this._popupShowDelayTimer = undefined;
             }
 
@@ -150,7 +151,7 @@ export class FrontLayerViewManager {
     dismissPopup(popupId: string): void {
         if (popupId === this._activePopupId && this._activePopupOptions) {
             if (this._popupShowDelayTimer) {
-                clearTimeout(this._popupShowDelayTimer);
+                Timers.clearTimeout(this._popupShowDelayTimer);
                 this._popupShowDelayTimer = undefined;
             }
 

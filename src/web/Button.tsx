@@ -10,13 +10,14 @@
 import * as PropTypes from 'prop-types';
 import * as React from 'react';
 
-import AccessibilityUtil from './AccessibilityUtil';
 import AppConfig from '../common/AppConfig';
 import { FocusArbitratorProvider } from '../common/utils/AutoFocusHelper';
-import { applyFocusableComponentMixin } from './utils/FocusManager';
 import { Button as ButtonBase, Types } from '../common/Interfaces';
-import Styles from './Styles';
 import Timers from '../common/utils/Timers';
+
+import AccessibilityUtil from './AccessibilityUtil';
+import { applyFocusableComponentMixin } from './utils/FocusManager';
+import Styles from './Styles';
 import UserInterface from './UserInterface';
 
 const _styles = {
@@ -59,16 +60,17 @@ export class Button extends ButtonBase {
 
     private _mountedButton: HTMLButtonElement | null = null;
     private _lastMouseDownEvent: Types.SyntheticEvent | undefined;
+    private _ignoreTouchEnd = false;
     private _ignoreClick = false;
     private _longPressTimer: number | undefined;
     private _isMouseOver = false;
     private _isFocusedWithKeyboard = false;
     private _isHoverStarted = false;
 
-    constructor(props: Types.ButtonProps, context: ButtonContext) {
+    constructor(props: Types.ButtonProps, context?: ButtonContext) {
         super(props, context);
 
-        if (context.hasRxButtonAscendant) {
+        if (context && context.hasRxButtonAscendant) {
             if (AppConfig.isDevelopmentMode()) {
                 console.warn('Button components should not be embedded. Some APIs, e.g. Accessibility, will not work.');
             }
@@ -101,6 +103,9 @@ export class Button extends ButtonBase {
                 aria-selected={ ariaSelected }
                 aria-checked={ ariaChecked }
                 onClick={ this.onClick }
+                onTouchStart={ this._onMouseDown }
+                onTouchMove={ this._onTouchMove }
+                onTouchEnd={ this._onTouchEnd }
                 onContextMenu={ this._onContextMenu }
                 onMouseDown={ this._onMouseDown }
                 onMouseUp={ this._onMouseUp }
@@ -190,6 +195,7 @@ export class Button extends ButtonBase {
     }
 
     private _onMouseDown = (e: React.SyntheticEvent<any>) => {
+        this._isMouseOver = true;
         if (this.props.onPressIn) {
             this.props.onPressIn(e);
         }
@@ -200,26 +206,86 @@ export class Button extends ButtonBase {
 
             // In the unlikely event we get 2 mouse down events, clear existing timer
             if (this._longPressTimer) {
-                clearTimeout(this._longPressTimer);
+                Timers.clearTimeout(this._longPressTimer);
             }
             this._longPressTimer = Timers.setTimeout(() => {
                 this._longPressTimer = undefined;
                 if (this.props.onLongPress) {
                     // lastMouseDownEvent can never be undefined at this point
                     this.props.onLongPress(this._lastMouseDownEvent!);
-                    this._ignoreClick = true;
+
+                    if ('touches' in e) {
+                        this._ignoreTouchEnd = true;
+                    } else {
+                        this._ignoreClick = true;
+                    }
                 }
-            }, _longPressTime);
+            }, this.props.delayLongPress || _longPressTime);
         }
     }
 
-    private _onMouseUp = (e: Types.SyntheticEvent) => {
+    private _onTouchMove = (e: React.SyntheticEvent<HTMLButtonElement, TouchEvent>) => {
+        const buttonRect = (e.target as HTMLButtonElement).getBoundingClientRect();
+        const wasMouseOver = this._isMouseOver;
+        const isMouseOver =
+            e.nativeEvent.touches[0].clientX > buttonRect.left &&
+            e.nativeEvent.touches[0].clientX < buttonRect.right &&
+            e.nativeEvent.touches[0].clientY > buttonRect.top &&
+            e.nativeEvent.touches[0].clientY < buttonRect.bottom;
+
+        // Touch has left the button, cancel the longpress handler.
+        if (wasMouseOver && !isMouseOver) {
+            if (this._longPressTimer) {
+                clearTimeout(this._longPressTimer);
+            }
+            if (this.props.onHoverEnd) {
+                this.props.onHoverEnd(e);
+            }
+        }
+        this._isMouseOver = isMouseOver;
+    }
+
+    private _onMouseUp = (e: Types.SyntheticEvent | Types.TouchEvent) => {
         if (this.props.onPressOut) {
             this.props.onPressOut(e);
         }
 
         if (this._longPressTimer) {
-            clearTimeout(this._longPressTimer);
+            Timers.clearTimeout(this._longPressTimer);
+        }
+    }
+
+    /**
+     * Case where onPressOut is not triggered and the bubbling is canceled:
+     * 1- Long press > release
+     *
+     * Cases where onPressOut is triggered:
+     * 2- Long press > leave button > release touch
+     * 3- Tap
+     *
+     * Case where onPressOut is not triggered and the bubbling is NOT canceled:
+     * 4- Press in > leave button > release touch
+     */
+    private _onTouchEnd = (e: Types.SyntheticEvent | Types.TouchEvent) => {
+        if (this._isMouseOver && this._ignoreTouchEnd) {
+            /* 1 */
+            e.stopPropagation();
+        } else if (
+            /* 2 */
+            !this._isMouseOver && this._ignoreTouchEnd ||
+            /* 3 */
+            this._isMouseOver && !this._ignoreTouchEnd
+        ) {
+            if (this.props.onPressOut) {
+                this.props.onPressOut(e);
+            }
+        } else {
+            /* 4 */
+            this._ignoreTouchEnd = false;
+        }
+
+        if (this._longPressTimer) {
+            Timers.clearTimeout(this._longPressTimer);
         }
     }
 
@@ -231,6 +297,14 @@ export class Button extends ButtonBase {
     private _onMouseLeave = (e: Types.SyntheticEvent) => {
         this._isMouseOver = false;
         this._onHoverEnd(e);
+
+        // The mouse is still down. A long press may be just happened. Re-enable the next click.
+        this._ignoreClick = false;
+
+        // Cancel longpress if mouse has left.
+        if (this._longPressTimer) {
+            Timers.clearTimeout(this._longPressTimer);
+        }
     }
 
     // When we get focus on an element, show the hover effect on the element.

@@ -88,7 +88,7 @@ export class View extends ViewCommon implements React.ChildContextProvider<ViewC
     private _popupContainer: PopupContainerView | undefined;
     private _popupToken: PopupComponent | undefined;
 
-    constructor(props: Types.ViewProps, context: ViewContext) {
+    constructor(props: Types.ViewProps, context?: ViewContext) {
         super(props, context);
 
         this._limitFocusWithin =
@@ -102,7 +102,7 @@ export class View extends ViewCommon implements React.ChildContextProvider<ViewC
                 this.setFocusLimited(true);
             }
         }
-        this._popupContainer = context.popupContainer;
+        this._popupContainer = context && context.popupContainer;
     }
 
     componentWillReceiveProps(nextProps: Types.ViewProps) {
@@ -345,7 +345,7 @@ export class View extends ViewCommon implements React.ChildContextProvider<ViewC
 
             // We don't use 'string' ref type inside ReactXP
             const originalRef = this._internalProps.ref;
-            assert(typeof originalRef === 'string', 'View: ReactXP must not use string refs internally');
+            assert(!(typeof originalRef === 'string'), 'View: ReactXP must not use string refs internally');
 
             const componentRef: Function = originalRef as Function;
             const focusableViewProps: RNW.FocusableWindowsProps<RN.ViewProps> = {

@@ -1,6 +1,6 @@
 {
   "name": "reactxp",
-  "version": "1.5.0",
+  "version": "1.6.1",
   "description": "Cross-platform abstraction layer for writing React-based applications a single time that work identically across web, React Native, and Electron distribution",
   "author": "ReactXP Team <reactxp@microsoft.com>",
   "license": "MIT",
@@ -12,28 +12,30 @@
     "tslint-release": "tslint --project tsconfig.json -r tslint.json -r ./node_modules/tslint-microsoft-contrib"
   },
   "dependencies": {
-    "@types/react": "16.3.18",
-    "@types/lodash": "4.14.118",
-    "@types/react-dom": "16.0.7",
-    "@types/react-native": "0.56.12",
+    "@types/lodash": "^4.14.123",
+    "@types/react": "^16.8.14",
+    "@types/react-dom": "^16.8.4",
+    "@types/react-native": "^0.57.51",
     "lodash": "^4.17.11",
-    "prop-types": "^15.6.2",
+    "prop-types": "^15.7.2",
     "rebound": "^0.1.0",
     "subscribableevent": "^1.0.1",
     "synctasks": "^0.3.3"
   },
   "peerDependencies": {
-    "react": "^16.5.0",
-    "react-dom": "^16.5.0",
-    "react-native": "^0.55.0",
-    "react-native-windows": "^0.55.0-rc.0"
+    "react": "^16.0",
+    "react-dom": "^16.0",
+    "react-native": ">=0.57 <0.60",
+    "react-native-webview": "^5.6.3",
+    "react-native-windows": "^0.57.1"
   },
   "devDependencies": {
-    "tslint": "5.11.0",
-    "tslint-microsoft-contrib": "6.0.0",
-    "tslint-react": "3.6.0",
-    "tsutils": "3.5.1",
-    "typescript": "3.2.1"
+    "react-native-webview": "^5.7.2",
+    "tslint": "^5.16.0",
+    "tslint-microsoft-contrib": "^6.1.1",
+    "tslint-react": "^4.0.0",
+    "tsutils": "^3.10.0",
+    "typescript": "^3.4.5"
   },
   "homepage": "https://microsoft.github.io/reactxp/",
   "repository": {

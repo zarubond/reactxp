@@ -11,8 +11,9 @@ import * as React from 'react';
 import * as RN from 'react-native';
 
 import Easing from '../common/Easing';
-import RXImage from './Image';
 import * as RX from '../common/Interfaces';
+
+import RXImage from './Image';
 import RXText from './Text';
 import RXTextInput from './TextInput';
 import RXView from './View';
@@ -33,7 +34,7 @@ export const CommonAnimatedClasses: AnimatedClasses = {
 
 let animatedClasses: AnimatedClasses = CommonAnimatedClasses;
 
-class AnimatedWrapper<P, T> extends RX.AnimatedComponent<P, T> {
+class AnimatedWrapper<P, T, C> extends RX.AnimatedComponent<P, T, C> {
     protected _mountedComponent: RN.ReactNativeBaseComponent<any, any> | undefined;
 
     setNativeProps(props: P) {
@@ -68,7 +69,7 @@ class AnimatedWrapper<P, T> extends RX.AnimatedComponent<P, T> {
     }
 }
 
-class AnimatedImage extends AnimatedWrapper<RX.Types.AnimatedImageProps, RX.Types.Stateless> {
+class AnimatedImage extends AnimatedWrapper<RX.Types.AnimatedImageProps, RX.Types.Stateless, RX.AnimatedImage> {
     render() {
         const additionalProps = { ref: this._onMount, style: this.props.style };
         return (
@@ -82,7 +83,7 @@ class AnimatedImage extends AnimatedWrapper<RX.Types.AnimatedImageProps, RX.Type
     }
 }
 
-class AnimatedText extends AnimatedWrapper<RX.Types.AnimatedTextProps, RX.Types.Stateless>  {
+class AnimatedText extends AnimatedWrapper<RX.Types.AnimatedTextProps, RX.Types.Stateless, RX.AnimatedText>  {
     render() {
         const additionalProps = { ref: this._onMount, style: this.props.style };
         return (
@@ -96,7 +97,7 @@ class AnimatedText extends AnimatedWrapper<RX.Types.AnimatedTextProps, RX.Types.
     }
 }
 
-class AnimatedTextInput extends AnimatedWrapper<RX.Types.AnimatedTextInputProps, RX.Types.Stateless>   {
+class AnimatedTextInput extends AnimatedWrapper<RX.Types.AnimatedTextInputProps, RX.Types.Stateless, RX.AnimatedTextInput>   {
     render() {
         const additionalProps = {ref: this._onMount, style: this.props.style };
         return (
@@ -110,7 +111,7 @@ class AnimatedTextInput extends AnimatedWrapper<RX.Types.AnimatedTextInputProps,
     }
 }
 
-class AnimatedView extends AnimatedWrapper<RX.Types.AnimatedViewProps, RX.Types.Stateless> {
+class AnimatedView extends AnimatedWrapper<RX.Types.AnimatedViewProps, RX.Types.Stateless, RX.AnimatedView> {
     setFocusRestricted(restricted: boolean) {
         // Nothing to do.
     }

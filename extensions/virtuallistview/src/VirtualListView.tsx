@@ -37,6 +37,7 @@
 
 import * as assert from 'assert';
 import * as _ from 'lodash';
+import { createRef, RefObject } from 'react';
 import * as RX from 'reactxp';
 
 import { VirtualListCell, VirtualListCellInfo, VirtualListCellRenderDetails } from './VirtualListCell';
@@ -67,7 +68,8 @@ export interface VirtualListViewCellRenderDetails<T extends VirtualListViewItemI
 
 }
 
-export interface VirtualListViewProps<ItemInfo extends VirtualListViewItemInfo> extends RX.CommonStyledProps<RX.Types.ViewStyleRuleSet> {
+export interface VirtualListViewProps<ItemInfo extends VirtualListViewItemInfo> extends
+        RX.CommonStyledProps<RX.Types.ViewStyleRuleSet, VirtualListView<ItemInfo>> {
     testId?: string;
 
     // Ordered list of descriptors for items to display in the list.
@@ -128,7 +130,8 @@ export interface VirtualListViewState {
     selectedItemKey?: string;
 }
 
-export interface VirtualCellInfo {
+export interface VirtualCellInfo<ItemInfo extends VirtualListViewItemInfo> {
+    cellRef: RefObject<VirtualListCell<ItemInfo>>;
     virtualKey: string;
     itemTemplate?: string;
     isHeightConstant: boolean;
@@ -172,8 +175,6 @@ const _maxRecycledCells = 50;
 
 const _maxRecycledCellsForAccessibility = 0;
 
-const _scrollViewRef = 'scrollview';
-
 const _virtualKeyPrefix = 'vc_';
 const _accessibilityVirtualKeyPrefix = 'ac_';
 
@@ -203,14 +204,15 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
     });
 
     // A dictionary of items that maps item keys to item indexes.
-    private _itemMap: { [itemKey: string]: number } = {};
+    private _itemMap = new Map<string, number>();
+
+    private _scrollViewRef = createRef<RX.ScrollView>();
 
     // When we need to actually re-render, mark this until it's resolved
     private _isRenderDirty = false;
 
     // Number of pending item animations. We defer some actions while animations are pending.
-    private _pendingAnimations: { [itemKey: string]: string } = {};
-
+    private _pendingAnimations = new Set<string>();
     // We attempt to guess the size of items before we render them, but if we're wrong, we need to accumulate the guess
     // error so that we can correct it later.
     private _heightAboveRenderAdjustment = 0;
@@ -226,24 +228,24 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
     private _itemsBelowRenderBlock = 0;
 
     // Items that we're waiting on a measure from
-    private _pendingMeasurements: { [itemKey: string]: string } = {};
+    private _pendingMeasurements = new Set<string>();
 
     // We first render items to fill the visible screen, and then render past it in another render pass.
     private _isInitialFillComplete = false;
 
     // Save a height cache of things that are no longer being rendered because we may scroll them off screen and still
     // want to know what their height is to calculate the size.
-    private _heightCache: { [itemKey: string]: number } = {};
+    private _heightCache = new Map<string, number>();
 
     // Next cell key. We keep incrementing this value so we always generate unique keys.
     private static _nextCellKey = 1;
 
     // Cells that contain visible items.
-    private _activeCells: { [itemKey: string]: VirtualCellInfo } = {};
+    private _activeCells = new Map<string, VirtualCellInfo<ItemInfo>>();
 
     // Cells that were previously allocated but no longer contain items that are visible.
     // They are kept around and reused to avoid exceess allocations.
-    private _recycledCells: VirtualCellInfo[] = [];
+    private _recycledCells: VirtualCellInfo<ItemInfo>[] = [];
 
     // List of cells that are rendered
     private _navigatableItemsRendered: {
@@ -364,34 +366,42 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
 
     private _handleItemListChange(props: VirtualListViewProps<ItemInfo>) {
         // Build a new item map.
-        const newItemMap: { [itemKey: string]: number } = {};
-        _.each(props.itemList, (item, itemIndex) => {
+        const newItemMap = new Map<string, number>();
+        let itemIndex = -1;
+        for (const item of props.itemList) {
+            itemIndex++;
             // Make sure there are no duplicate keys.
-            if (item.key in newItemMap) {
+            if (newItemMap.has(item.key)) {
                 assert.ok(false, 'Found a duplicate key: ' + item.key);
                 if (props.logInfo) {
                     props.logInfo('Item with key ' + item.key + ' is duplicated at positions ' + itemIndex +
-                        ' and ' + newItemMap[item.key]);
+                        ' and ' + newItemMap.get(item.key)!);
                 }
             }
-            newItemMap[item.key] = itemIndex;
+            newItemMap.set(item.key, itemIndex);
 
             if (this.props && this.props.itemList) {
-                const cell = this._activeCells[item.key];
+                const cell = this._activeCells.get(item.key);
                 if (cell) {
-                    const oldItemIndex = this._itemMap[item.key];
-                    const oldItem = this.props.itemList[oldItemIndex];
-                    if (this.props.skipRenderIfItemUnchanged && !_.isEqual(oldItem, item)) {
+                    const oldItemIndex = this._itemMap.get(item.key);
+                    if (oldItemIndex === undefined) {
                         cell.shouldUpdate = true;
+                    } else {
+                        const oldItem = this.props.itemList[oldItemIndex];
+                        if (this.props.skipRenderIfItemUnchanged || !_.isEqual(oldItem, item)) {
+                            cell.shouldUpdate = true;
+                        }
                     }
                 }
             }
-        });
+        }
 
         // Stop tracking the heights of deleted items.
         const oldItems = (this.props && this.props.itemList) ? this.props.itemList : [];
-        _.each(oldItems, (item, itemIndex) => {
-            if (!(item.key in newItemMap)) {
+        itemIndex = -1;
+        for (const item of oldItems) {
+            itemIndex++;
+            if (!newItemMap.has(item.key)) {
                 // If we're deleting an item that's above the current render block,
                 // update the adjustment so we avoid an unnecessary scroll.
 
@@ -407,15 +417,15 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
                     this._heightAboveRenderAdjustment += this._getHeightOfItem(oldItems[itemIndex]);
                 }
 
-                delete this._heightCache[item.key];
-                delete this._pendingMeasurements[item.key];
+                this._heightCache.delete(item.key);
+                this._pendingMeasurements.delete(item.key);
 
                 // Recycle any deleted active cells up front so they can be recycled below.
-                if (this._activeCells[item.key]) {
+                if (this._activeCells.has(item.key)) {
                     this._recycleCell(item.key);
                 }
             }
-        });
+        }
 
         const overdrawAmount = this._calcOverdrawAmount();
         const renderBlockTopLimit = this._lastScrollTop - overdrawAmount;
@@ -428,19 +438,20 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
         this._itemsInRenderBlock = 0;
 
         // Determine the new bounds of the render block.
-        for (let i = 0; i < props.itemList.length; i++) {
-            const item = props.itemList[i];
+        itemIndex = -1;
+        for (const item of props.itemList) {
+            itemIndex++;
             const itemHeight = this._getHeightOfItem(item);
 
             yPosition += itemHeight;
 
             if (yPosition <= renderBlockTopLimit) {
-                if (this._activeCells[item.key]) {
+                if (this._activeCells.has(item.key)) {
                     this._recycleCell(item.key);
                 }
             } else {
                 if (lookingForStartOfRenderBlock) {
-                    this._itemsAboveRenderBlock = i;
+                    this._itemsAboveRenderBlock = itemIndex;
                     lookingForStartOfRenderBlock = false;
                 }
 
@@ -448,20 +459,20 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
                     // We're within the render block.
                     this._itemsInRenderBlock++;
 
-                    if (this._activeCells[item.key]) {
+                    if (this._activeCells.has(item.key)) {
                         this._setCellTopAndVisibility(item.key, this._shouldShowItem(item, props),
                             yPosition - itemHeight, !!props.animateChanges);
                     } else {
-                        this._allocateCell(item.key, item.template, i, !item.measureHeight, item.height,
+                        this._allocateCell(item.key, item.template, itemIndex, !item.measureHeight, item.height,
                             yPosition - itemHeight, this._shouldShowItem(item, props));
 
                         if (!this._isItemHeightKnown(item)) {
-                            this._pendingMeasurements[item.key] = item.key;
+                            this._pendingMeasurements.add(item.key);
                         }
                     }
                 } else {
                     // We're past the render block.
-                    if (this._activeCells[item.key]) {
+                    if (this._activeCells.has(item.key)) {
                         this._recycleCell(item.key);
                     }
                 }
@@ -478,6 +489,13 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             this._itemsAboveRenderBlock + this._itemsInRenderBlock - 1);
         this._heightBelowRenderBlock = this._calcHeightOfItems(props,
             this._itemsAboveRenderBlock + this._itemsInRenderBlock, props.itemList.length - 1);
+
+        // Pre-populate the container height with known values early - if there are dynamically sized items in the list, this will be
+        // corrected during the onLayout phase
+        if (this._containerHeight === 0) {
+            this._containerHeight = this._heightAboveRenderBlock + this._heightOfRenderBlock + this._heightBelowRenderBlock;
+            this._containerHeightValue.setValue(this._containerHeight);
+        }
     }
 
     private _calcOverdrawAmount() {
@@ -529,7 +547,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             return;
         }
 
-        const itemIndex = this._itemMap[itemKey];
+        const itemIndex = this._itemMap.get(itemKey);
 
         // Because this event is async on some platforms, the index may have changed or
         // the item could have been removed by the time the event arrives.
@@ -550,7 +568,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             return;
         }
 
-        this._heightCache[itemKey] = newHeight;
+        this._heightCache.set(itemKey, newHeight);
 
         if (itemIndex < this._itemsAboveRenderBlock || itemIndex >= this._itemsAboveRenderBlock + this._itemsInRenderBlock) {
             // Getting a response for a culled item (no longer in tracked render block), so track the height but don't update anything.
@@ -594,14 +612,8 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             needsRecalc = true;
         }
 
-        if (this._pendingMeasurements[itemKey]) {
-            delete this._pendingMeasurements[itemKey];
-
-            // Are we done measuring things?
-            if (_.size(this._pendingMeasurements) === 0) {
-                needsRecalc = true;
-            }
-        }
+        this._pendingMeasurements.delete(itemKey);
+        needsRecalc = needsRecalc || this._pendingMeasurements.size === 0;
 
         if (needsRecalc) {
             this._calcNewRenderedItemState(this.props);
@@ -614,12 +626,13 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
 
     private _onAnimateStartStopItem = (itemKey: string, animateStart: boolean) => {
         if (this._isMounted) {
+            const hasAnimation = this._pendingAnimations.has(itemKey);
             if (animateStart) {
-                assert.ok(this._pendingAnimations[itemKey] === undefined, 'unexpected animation start');
-                this._pendingAnimations[itemKey] = itemKey;
+                assert.ok(!hasAnimation, 'unexpected animation start');
+                this._pendingAnimations.add(itemKey);
             } else {
-                assert.ok(this._pendingAnimations[itemKey], 'unexpected animation complete');
-                delete this._pendingAnimations[itemKey];
+                assert.ok(hasAnimation, 'unexpected animation complete');
+                this._pendingAnimations.delete(itemKey);
 
                 // We defer this because there are cases where we can cancel animations
                 // because we've received new props. We don't want to re-enter the
@@ -627,7 +640,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
                 // to be updated.
                 _.defer(() => {
                     if (this._isMounted) {
-                        if (_.size(this._pendingAnimations) === 0 && this._isMounted) {
+                        if (this._pendingAnimations.size === 0 && this._isMounted) {
                             // Perform deferred actions now that all animations are complete.
                             this._reconcileCorrections(this.props);
                         }
@@ -677,7 +690,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             return;
         }
 
-        if (_.size(this._pendingMeasurements) > 0) {
+        if (this._pendingMeasurements.size > 0) {
             // Don't bother if we're still measuring things. Wait for the last batch to end.
             return;
         }
@@ -763,7 +776,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
                         yPosition - itemHeight, this._shouldShowItem(item, props));
 
                     if (!this._isItemHeightKnown(item)) {
-                        this._pendingMeasurements[item.key] = item.key;
+                        this._pendingMeasurements.add(item.key);
                     }
                     break;
                 }
@@ -835,7 +848,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             }
 
             if (!isHeightKnown) {
-                this._pendingMeasurements[item.key] = item.key;
+                this._pendingMeasurements.add(item.key);
             }
 
             this._allocateCell(item.key, item.template, itemIndex, !item.measureHeight, item.height,
@@ -847,7 +860,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
         };
 
         // Try to add items to the bottom of the current render block.
-        while (_.size(this._pendingMeasurements) < _maxSimultaneousMeasures) {
+        while (this._pendingMeasurements.size < _maxSimultaneousMeasures) {
             // Stop if we go beyond the bottom render limit.
             if (this._itemsBelowRenderBlock <= 0 ||
                 this._heightAboveRenderAdjustment + this._heightAboveRenderBlock +
@@ -859,7 +872,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
         }
 
         // Try to add an item to the top of the current render block.
-        while (_.size(this._pendingMeasurements) < _maxSimultaneousMeasures) {
+        while (this._pendingMeasurements.size < _maxSimultaneousMeasures) {
             if (this._itemsAboveRenderBlock <= 0 ||
                 this._heightAboveRenderAdjustment + this._heightAboveRenderBlock <= renderBlockTopLimit) {
                 break;
@@ -869,7 +882,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
         }
 
         // See if we've filled the screen and rendered it, and we're not waiting on any measurements.
-        if (!this._isInitialFillComplete && !this._isRenderDirty && _.size(this._pendingMeasurements) === 0) {
+        if (!this._isInitialFillComplete && !this._isRenderDirty && this._pendingMeasurements.size === 0) {
             // Time for overrender. Recalc render lines.
             renderMargin = overdrawAmount;
             renderBlockTopLimit = this._lastScrollTop - renderMargin;
@@ -891,7 +904,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
     private _reconcileCorrections(props: VirtualListViewProps<ItemInfo>) {
         // If there are pending animations, don't adjust because it will disrupt
         // the animations. When all animations are complete, we will get called back.
-        if (_.size(this._pendingAnimations) > 0) {
+        if (this._pendingAnimations.size > 0) {
             return;
         }
 
@@ -924,7 +937,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
 
             for (let i = this._itemsAboveRenderBlock; i < this._itemsAboveRenderBlock + this._itemsInRenderBlock; i++) {
                 const item = props.itemList[i];
-                const cell = this._activeCells[item.key];
+                const cell = this._activeCells.get(item.key)!;
                 this._setCellTopAndVisibility(item.key, cell.isVisible,
                     cell.top - this._heightAboveRenderAdjustment, false);
             }
@@ -945,7 +958,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
         for (let i = 0; i < this._itemsInRenderBlock; i++) {
             const itemIndex = this._itemsAboveRenderBlock + i;
             const item = props.itemList[itemIndex];
-            const cellInfo = this._activeCells[item.key];
+            const cellInfo = this._activeCells.get(item.key)!;
             this._setCellTopAndVisibility(item.key, this._shouldShowItem(item, props),
                 cellInfo.top, false);
         }
@@ -969,12 +982,10 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
     // Cell Management Methods
 
     private _allocateCell(itemKey: string, itemTemplate: string | undefined, itemIndex: number, isHeightConstant: boolean,
-        height: number, top: number, isVisible: boolean): VirtualCellInfo {
-        let newCell: VirtualCellInfo | null = null;
+        height: number, top: number, isVisible: boolean): VirtualCellInfo<ItemInfo> {
+        let newCell = this._activeCells.get(itemKey);
 
-        if (this._activeCells[itemKey]) {
-            newCell = this._activeCells[itemKey];
-        } else {
+        if (!newCell) {
             // If there's a specified template, see if we can find an existing
             // recycled cell that we can reuse with the same template.
             if (itemTemplate && isHeightConstant) {
@@ -1004,7 +1015,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             assert.ok(newCell.isHeightConstant === isHeightConstant, 'isHeightConstant assumed to not change');
             assert.ok(newCell.itemTemplate === itemTemplate, 'itemTemplate assumed to not change');
 
-            const mountedCell = this.refs[newCell.virtualKey] as VirtualListCell<ItemInfo>;
+            const mountedCell = newCell.cellRef.current;
             if (mountedCell) {
                 mountedCell.setVisibility(isVisible);
                 mountedCell.setTop(top);
@@ -1013,6 +1024,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
         } else {
             // We didn't find a recycled cell that we could use. Allocate a new one.
             newCell = {
+                cellRef: createRef<VirtualListCell<ItemInfo>>(),
                 virtualKey: _virtualKeyPrefix + VirtualListView._nextCellKey,
                 itemTemplate: itemTemplate,
                 isHeightConstant: isHeightConstant,
@@ -1026,12 +1038,12 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
         }
 
         this._isRenderDirty = true;
-        this._activeCells[itemKey] = newCell;
+        this._activeCells.set(itemKey, newCell);
         return newCell;
     }
 
     private _recycleCell(itemKey: string) {
-        const virtualCellInfo = this._activeCells[itemKey];
+        const virtualCellInfo = this._activeCells.get(itemKey);
 
         if (virtualCellInfo) {
             if (this._maxRecycledCells > 0) {
@@ -1053,14 +1065,14 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
                 }
             }
 
-            delete this._activeCells[itemKey];
+            this._activeCells.delete(itemKey);
         }
     }
 
     private _setCellTopAndVisibility(itemKey: string, isVisibile: boolean, top: number,
         animateIfPreviouslyVisible: boolean) {
 
-        const cellInfo = this._activeCells[itemKey];
+        const cellInfo = this._activeCells.get(itemKey);
         if (!cellInfo) {
             assert.ok(false, 'Missing cell');
             return;
@@ -1074,7 +1086,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
         cellInfo.top = top;
 
         // Set the "live" values as well.
-        const cell = this.refs[cellInfo.virtualKey] as VirtualListCell<ItemInfo>;
+        const cell = cellInfo.cellRef.current;
         if (cell) {
             cell.setVisibility(isVisibile);
             cell.setTop(top, animate);
@@ -1082,12 +1094,12 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
     }
 
     private _isCellVisible(itemKey: string): boolean {
-        const cellInfo = this._activeCells[itemKey];
-        return (cellInfo && cellInfo.isVisible);
+        const cellInfo = this._activeCells.get(itemKey);
+        return (!!cellInfo && cellInfo.isVisible);
     }
 
     scrollToTop = (animated = true, top = 0) => {
-        const scrollView = this.refs[_scrollViewRef] as RX.ScrollView;
+        const scrollView = this._scrollViewRef.current;
         if (scrollView) {
             scrollView.setScrollTop(top, animated);
         }
@@ -1104,7 +1116,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
         // Build a list of all the cells we're going to render. This includes all of the active
         // cells plus any recycled (offscreen) cells.
         let cellList: {
-            cellInfo: VirtualCellInfo;
+            cellInfo: VirtualCellInfo<ItemInfo>;
             item: ItemInfo | undefined;
             itemIndex: number | undefined;
         }[] = [];
@@ -1113,7 +1125,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             const itemIndex = this._itemsAboveRenderBlock + i;
             const item = this.props.itemList[itemIndex];
 
-            const virtualCellInfo = this._activeCells[item.key];
+            const virtualCellInfo = this._activeCells.get(item.key)!;
             assert.ok(virtualCellInfo, 'Active Cell not found for key ' + item.key + ', index=' + i);
 
             cellList.push({
@@ -1127,14 +1139,14 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             }
         }
 
-        _.each(this._recycledCells, virtualCellInfo => {
+        for (const virtualCellInfo of this._recycledCells) {
             assert.ok(virtualCellInfo, 'Recycled Cells array contains a null/undefined object');
             cellList.push({
                 cellInfo: virtualCellInfo,
                 item: undefined,
                 itemIndex: undefined
             });
-        });
+        }
 
         // Sort the list of cells by virtual key so the order doesn't change. Otherwise
         // the underlying render engine (the browser or React Native) treat it as a DOM
@@ -1155,7 +1167,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             }
         }
 
-        _.each(cellList, cell => {
+        for (const cell of cellList) {
             let tabIndexValue = -1;
             let isFocused = false;
             let isSelected = false;
@@ -1182,7 +1194,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             // We can't disable it.
             itemsRendered.push(
                 <VirtualListCell
-                    ref={ cell.cellInfo.virtualKey }
+                    ref={ cell.cellInfo.cellRef }
                     key={ this._isAndroidScreenReaderEnabled() ? _accessibilityVirtualKeyPrefix +
                         cell.cellInfo.virtualKey : cell.cellInfo.virtualKey }
                     onLayout={ !cell.cellInfo.isHeightConstant ? this._onLayoutItem : undefined }
@@ -1208,7 +1220,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
             );
 
             cell.cellInfo.shouldUpdate = false;
-        });
+        }
 
         if (this.props.logInfo) {
             // [NOTE: For debugging] This shows the order in which virtual cells are laid out.
@@ -1235,7 +1247,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
 
         return (
             <RX.ScrollView
-                ref={ _scrollViewRef }
+                ref={ this._scrollViewRef }
                 testId={ this.props.testId }
                 onLayout={ this._onLayoutContainer }
                 onScroll={ this._onScroll }
@@ -1274,18 +1286,20 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
     }
 
     // Sets selection & focus to specified key
-    selectItemKey(key: string) {
+    selectItemKey(key: string, scrollToItem = true) {
         // Set focus and selection
         this.setState({
             lastFocusedItemKey: key,
             selectedItemKey: key
         });
-        this._scrollToItemKey(key);
+        if (scrollToItem) {
+            this._scrollToItemKey(key);
+        }
     }
 
     private _onItemSelected = (itemInfo?: ItemInfo) => {
         if (itemInfo) {
-            this.selectItemKey(itemInfo.key);
+            this.selectItemKey(itemInfo.key, false);
             if (this.props.onItemSelected) {
                 this.props.onItemSelected(itemInfo);
             }
@@ -1293,7 +1307,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
     }
 
     private _onKeyDown = (e: RX.Types.KeyboardEvent) => {
-        if ((this.refs && !this.refs[_scrollViewRef]) ||
+        if (!this._scrollViewRef.current ||
                 (e.keyCode !== _keyCodeUpArrow && e.keyCode !== _keyCodeDownArrow)) {
             return;
         }
@@ -1329,19 +1343,23 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
 
     // Returns true if successfully found/focused, false if not found/focused
     private _focusSubsequentItem(direction: FocusDirection, viaKeyboard: boolean, retry = true): boolean {
-        let index = _.findIndex(this._navigatableItemsRendered, item => item.key === this.state.lastFocusedItemKey);
+        let index: number | undefined = _.findIndex(this._navigatableItemsRendered, item => item.key === this.state.lastFocusedItemKey);
 
         if (index !== -1 && index + direction > -1 && index + direction < this._navigatableItemsRendered.length) {
-            const newElementForFocus = this.refs[this._navigatableItemsRendered[index + direction].vc_key] as VirtualListCell<ItemInfo>;
-            newElementForFocus.focus();
-            if (viaKeyboard && newElementForFocus.props.itemKey) {
-                this._scrollToItemKey(newElementForFocus.props.itemKey);
+            const newFocusKey = this._navigatableItemsRendered[index + direction].key;
+            const cellForFocus = this._activeCells.get(newFocusKey);
+            if (cellForFocus && cellForFocus.cellRef.current) {
+                const newElementForFocus = cellForFocus.cellRef.current;
+                newElementForFocus.focus();
+                if (viaKeyboard && newElementForFocus.props.itemKey) {
+                    this._scrollToItemKey(newElementForFocus.props.itemKey);
+                }
             }
             return true;
         }
 
         if (index === -1 && retry && this.state.lastFocusedItemKey !== undefined) {
-            index = this._itemMap[this.state.lastFocusedItemKey];
+            index = this._itemMap.get(this.state.lastFocusedItemKey);
 
             if (index === undefined) {
                 assert.ok(false, 'Something went wrong in finding last focused item');
@@ -1440,7 +1458,7 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
     }
 
     private _isItemHeightKnown(item: VirtualListViewItemInfo) {
-        return !item.measureHeight || !_.isUndefined(this._heightCache[item.key]);
+        return !item.measureHeight || this._heightCache.has(item.key);
     }
 
     private _getHeightOfItem(item: VirtualListViewItemInfo | undefined) {
@@ -1454,8 +1472,9 @@ export class VirtualListView<ItemInfo extends VirtualListViewItemInfo>
         }
 
         // See if we have it cached
-        if (!_.isUndefined(this._heightCache[item.key])) {
-            return this._heightCache[item.key];
+        const cachedHeight = this._heightCache.get(item.key);
+        if (cachedHeight !== undefined) {
+            return cachedHeight;
         }
 
         // Nope -- use guess given to us

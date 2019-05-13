@@ -11,19 +11,21 @@ import * as PropTypes from 'prop-types';
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 
-import AccessibilityUtil from './AccessibilityUtil';
-import AnimateListEdits from './listAnimations/AnimateListEdits';
 import AppConfig from '../common/AppConfig';
 import { FocusArbitratorProvider } from '../common/utils/AutoFocusHelper';
-import { applyFocusableComponentMixin, FocusManager } from './utils/FocusManager';
 import { RestrictFocusType } from '../common/utils/FocusManager';
-import { Types } from '../common/Interfaces';
-import PopupContainerView from './PopupContainerView';
+import * as RX from '../common/Interfaces';
 import { PopupComponent } from '../common/PopupContainerViewBase';
+
+import AccessibilityUtil from './AccessibilityUtil';
+import AnimateListEdits from './listAnimations/AnimateListEdits';
+import { applyFocusableComponentMixin, FocusManager } from './utils/FocusManager';
+import PopupContainerView from './PopupContainerView';
 import restyleForInlineText from './utils/restyleForInlineText';
 import Styles from './Styles';
 import ViewBase from './ViewBase';
 
+// Cast to any to allow merging of web and RX styles
 const _styles = {
     defaultStyle: {
         position: 'relative',
@@ -33,7 +35,7 @@ const _styles = {
         flexShrink: 0,
         overflow: 'hidden',
         alignItems: 'stretch'
-    },
+    } as any,
 
     // See resize detector comments in renderResizeDetectorIfNeeded() method below.
     resizeDetectorContainerStyles: {
@@ -78,7 +80,7 @@ export interface ViewContext {
     focusArbitrator?: FocusArbitratorProvider;
 }
 
-export class View extends ViewBase<Types.ViewProps, Types.Stateless> {
+export class View extends ViewBase<RX.Types.ViewProps, RX.Types.Stateless, RX.View> {
     static contextTypes: React.ValidationMap<any> = {
         isRxParentAText: PropTypes.bool,
         focusManager: PropTypes.object,
@@ -108,12 +110,12 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless> {
     private _popupContainer: PopupContainerView | undefined;
     private _popupToken: PopupComponent | undefined;
 
-    constructor(props: Types.ViewProps, context: ViewContext) {
+    constructor(props: RX.Types.ViewProps, context?: ViewContext) {
         super(props, context);
 
         this._limitFocusWithin =
-            (props.limitFocusWithin === Types.LimitFocusType.Limited) ||
-            (props.limitFocusWithin === Types.LimitFocusType.Accessible);
+            (props.limitFocusWithin === RX.Types.LimitFocusType.Limited) ||
+            (props.limitFocusWithin === RX.Types.LimitFocusType.Accessible);
 
         if (this.props.restrictFocusWithin || this._limitFocusWithin) {
             this._focusManager = new FocusManager(context && context.focusManager);
@@ -123,7 +125,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless> {
             }
         }
 
-        this._popupContainer = context.popupContainer;
+        this._popupContainer = context && context.popupContainer;
 
         if (props.arbitrateFocus) {
             this._updateFocusArbitratorProvider(props);
@@ -265,7 +267,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless> {
         return !!this._popupContainer && this._popupContainer.isHidden();
     }
 
-    private _updateFocusArbitratorProvider(props: Types.ViewProps) {
+    private _updateFocusArbitratorProvider(props: RX.Types.ViewProps) {
         if (props.arbitrateFocus) {
             if (this._focusArbitratorProvider) {
                 this._focusArbitratorProvider.setCallback(props.arbitrateFocus);
@@ -316,7 +318,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless> {
     }
 
     render() {
-        const combinedStyles = Styles.combine([_styles.defaultStyle, this.props.style]) as any;
+        const combinedStyles = Styles.combine([_styles.defaultStyle, this.props.style]);
         let ariaRole = AccessibilityUtil.accessibilityTraitToString(this.props.accessibilityTraits);
         const tabIndex = this.props.tabIndex;
         const ariaSelected = AccessibilityUtil.accessibilityTraitToAriaSelected(this.props.accessibilityTraits);
@@ -355,6 +357,11 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless> {
             onMouseLeave: this.props.onMouseLeave,
             onMouseOver: this.props.onMouseOver,
             onMouseMove: this.props.onMouseMove,
+            // Weird things happen: ReactXP.Types.Touch is not assignable to React.Touch
+            onTouchStart: this.props.onResponderStart as React.HTMLAttributes<any>['onTouchStart'],
+            onTouchMove: this.props.onResponderMove as React.HTMLAttributes<any>['onTouchMove'],
+            onTouchEnd: this.props.onResponderRelease,
+            onTouchCancel: this.props.onResponderTerminate,
             draggable: this.props.onDragStart ? true : undefined,
             onDragStart: this.props.onDragStart,
             onDrag: this.props.onDrag,
@@ -403,7 +410,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless> {
             reactElement;
     }
 
-    componentWillReceiveProps(nextProps: Types.ViewProps) {
+    componentWillReceiveProps(nextProps: RX.Types.ViewProps) {
         super.componentWillReceiveProps(nextProps);
 
         if (AppConfig.isDevelopmentMode()) {
@@ -489,7 +496,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless> {
     }
 }
 
-applyFocusableComponentMixin(View, function(this: View, nextProps?: Types.ViewProps) {
+applyFocusableComponentMixin(View, function(this: View, nextProps?: RX.Types.ViewProps) {
     // VoiceOver with the VoiceOver key combinations (Ctrl+Option+Left/Right) focuses
     // <div>s when whatever tabIndex is set (even if tabIndex=-1). So, View is focusable
     // when tabIndex is not undefined.

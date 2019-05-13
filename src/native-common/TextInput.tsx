@@ -10,10 +10,11 @@ import * as PropTypes from 'prop-types';
 import * as React from 'react';
 import * as RN from 'react-native';
 
-import AccessibilityUtil from './AccessibilityUtil';
 import { FocusArbitratorProvider } from '../common/utils/AutoFocusHelper';
-import EventHelpers from './utils/EventHelpers';
 import { Types } from '../common/Interfaces';
+
+import AccessibilityUtil from './AccessibilityUtil';
+import EventHelpers from './utils/EventHelpers';
 import Styles from './Styles';
 
 const _styles = {
@@ -48,11 +49,11 @@ export class TextInput extends React.Component<Types.TextInputProps, TextInputSt
     private _selection: Selection = { start: 0, end: 0 };
     protected _mountedComponent: RN.TextInput | undefined;
 
-    constructor(props: Types.TextInputProps, context: TextInputContext) {
+    constructor(props: Types.TextInputProps, context?: TextInputContext) {
         super(props, context);
 
         this.state = {
-            inputValue: props.value || '',
+            inputValue: props.value !== undefined ? props.value : (props.defaultValue || ''),
             isFocused: false
         };
     }

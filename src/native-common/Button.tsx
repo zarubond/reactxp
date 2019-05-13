@@ -11,19 +11,20 @@ import * as PropTypes from 'prop-types';
 import * as React from 'react';
 import * as RN from 'react-native';
 
-import { MacComponentAccessibilityProps } from './Accessibility';
-import AccessibilityUtil from './AccessibilityUtil';
-import Animated from './Animated';
 import App from '../native-common/App';
 import AppConfig from '../common/AppConfig';
 import assert from '../common/assert';
 import { FocusArbitratorProvider } from '../common/utils/AutoFocusHelper';
-import EventHelpers from './utils/EventHelpers';
 import { Button as ButtonBase, Types } from '../common/Interfaces';
-import Platform from './Platform';
-import Styles from './Styles';
 import Timers from '../common/utils/Timers';
 import { ButtonStyleRuleSet, StyleRuleSetRecursive } from '../common/Types';
+
+import { MacComponentAccessibilityProps } from './Accessibility';
+import AccessibilityUtil from './AccessibilityUtil';
+import Animated from './Animated';
+import EventHelpers from './utils/EventHelpers';
+import Platform from './Platform';
+import Styles from './Styles';
 import UserInterface from './UserInterface';
 
 const _styles = {
@@ -53,7 +54,7 @@ function noop() { /* noop */ }
 
 function applyMixin(thisObj: any, mixin: {[propertyName: string]: any}, propertiesToSkip: string[]) {
     Object.getOwnPropertyNames(mixin).forEach(name => {
-        if (name !== 'constructor' && propertiesToSkip.indexOf(name) === -1) {
+        if (name !== 'constructor' && propertiesToSkip.indexOf(name) === -1 && typeof mixin[name].bind === 'function') {
             assert(
                 !(name in thisObj),
                 `An object cannot have a method with the same name as one of its mixins: "${name}"`
@@ -102,7 +103,7 @@ export class Button extends ButtonBase {
     private _opacityAnimatedValue: RN.Animated.Value | undefined;
     private _opacityAnimatedStyle: Types.AnimatedViewStyleRuleSet | undefined;
 
-    constructor(props: Types.ButtonProps, context: ButtonContext) {
+    constructor(props: Types.ButtonProps, context?: ButtonContext) {
         super(props, context);
         applyMixin(this, RN.Touchable.Mixin, [
             // Properties that Button and RN.Touchable.Mixin have in common. Button needs
@@ -113,7 +114,7 @@ export class Button extends ButtonBase {
         this.state = this.touchableGetInitialState();
         this._setOpacityStyles(props);
 
-        if (context.hasRxButtonAscendant) {
+        if (context && context.hasRxButtonAscendant) {
             if (AppConfig.isDevelopmentMode()) {
                 console.warn('Button components should not be embedded. Some APIs, e.g. Accessibility, will not work.');
             }
@@ -215,7 +216,7 @@ export class Button extends ButtonBase {
         if (this._isTouchFeedbackApplicable()) {
             if (this.props.underlayColor) {
                 if (this._hideTimeout) {
-                    clearTimeout(this._hideTimeout);
+                    Timers.clearTimeout(this._hideTimeout);
                     this._hideTimeout = undefined;
                 }
                 this._showUnderlay();
@@ -236,7 +237,7 @@ export class Button extends ButtonBase {
         if (this._isTouchFeedbackApplicable()) {
             if (this.props.underlayColor) {
                 if (this._hideTimeout) {
-                    clearTimeout(this._hideTimeout);
+                    Timers.clearTimeout(this._hideTimeout);
                 }
                 this._hideTimeout = Timers.setTimeout(this._hideUnderlay, _hideUnderlayTimeout);
             }

@@ -9,8 +9,9 @@
 
 import SubscribableEvent from 'subscribableevent';
 
-import { isUndefined } from './lodashMini';
 import Timers from '../../common/utils/Timers';
+
+import { isUndefined } from './lodashMini';
 
 const idleTimeInMs = 60 * 1000;
 
@@ -74,7 +75,7 @@ export class AppVisibilityUtils {
 
     private _wakeUpAndSetTimerForIdle = () => {
         if (!isUndefined(this._timer)) {
-            clearTimeout(this._timer);
+            Timers.clearTimeout(this._timer);
         }
 
         if (!this.hasFocus()) {

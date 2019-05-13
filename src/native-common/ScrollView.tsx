@@ -11,13 +11,15 @@ import * as React from 'react';
 import * as RN from 'react-native';
 
 import * as RX from '../common/Interfaces';
+
 import ViewBase from './ViewBase';
 
 // TODO: #737970 Remove special case for UWP/MacOS when this bug is fixed. The bug
 //   causes you to have to click twice instead of once on some pieces of UI in
 //   order for the UI to acknowledge your interaction.
 const overrideKeyboardShouldPersistTaps = RN.Platform.OS === 'macos' || RN.Platform.OS === 'windows';
-export class ScrollView extends ViewBase<RX.Types.ScrollViewProps, RX.Types.Stateless, RN.ScrollView> implements RX.ScrollView {
+export class ScrollView extends ViewBase<RX.Types.ScrollViewProps, RX.Types.Stateless, RN.ScrollView, RX.ScrollView>
+        implements RX.ScrollView {
     private _scrollTop = 0;
     private _scrollLeft = 0;
 

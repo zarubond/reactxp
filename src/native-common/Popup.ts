@@ -8,8 +8,10 @@
  */
 
 import assert from '../common/assert';
-import FrontLayerViewManager from './FrontLayerViewManager';
 import * as RX from '../common/Interfaces';
+import Timers from '../common/utils/Timers';
+
+import FrontLayerViewManager from './FrontLayerViewManager';
 
 export class Popup extends RX.Popup {
     show(options: RX.Types.PopupOptions, popupId: string, delay?: number): boolean {
@@ -22,7 +24,7 @@ export class Popup extends RX.Popup {
     autoDismiss(popupId: string, delay?: number): void {
         assert(popupId, `popupId must be a non-empty string. Actual: ${ popupId }`);
 
-        setTimeout(() => FrontLayerViewManager.dismissPopup(popupId), delay || 0);
+        Timers.setTimeout(() => FrontLayerViewManager.dismissPopup(popupId), delay || 0);
     }
 
     dismiss(popupId: string): void {

@@ -10,10 +10,11 @@
 import * as SyncTasks from 'synctasks';
 
 import AppConfig from '../common/AppConfig';
-import FrontLayerViewManager from './FrontLayerViewManager';
 import * as RX from '../common/Interfaces';
-import * as _ from './utils/lodashMini';
 import Timers from '../common/utils/Timers';
+
+import FrontLayerViewManager from './FrontLayerViewManager';
+import * as _ from './utils/lodashMini';
 
 // We create a periodic timer to detect layout changes that are performed behind
 // our back by the browser's layout engine. We do this more aggressively when
@@ -21,10 +22,10 @@ import Timers from '../common/utils/Timers';
 const _layoutTimerActiveDuration = 1000;
 const _layoutTimerInactiveDuration = 10000;
 
-export abstract class ViewBase<P extends RX.Types.ViewProps, S> extends RX.ViewBase<P, S> {
+export abstract class ViewBase<P extends RX.Types.ViewPropsShared<C>, S, C extends RX.View | RX.ScrollView> extends RX.ViewBase<P, S> {
     private static _viewCheckingTimer: number | undefined;
     private static _isResizeHandlerInstalled = false;
-    private static _viewCheckingList: ViewBase<RX.Types.ViewProps, RX.Types.Stateless>[] = [];
+    private static _viewCheckingList: ViewBase<RX.Types.ViewPropsShared<RX.View | RX.ScrollView>, any, RX.View | RX.ScrollView>[] = [];
     private static _appActivationState = RX.Types.AppActivationState.Active;
 
     abstract render(): JSX.Element;
@@ -40,7 +41,7 @@ export abstract class ViewBase<P extends RX.Types.ViewProps, S> extends RX.ViewB
 
             // Cancel any existing timers.
             if (ViewBase._viewCheckingTimer) {
-                clearInterval(ViewBase._viewCheckingTimer);
+                Timers.clearInterval(ViewBase._viewCheckingTimer);
                 ViewBase._viewCheckingTimer = undefined;
             }
 
@@ -57,7 +58,7 @@ export abstract class ViewBase<P extends RX.Types.ViewProps, S> extends RX.ViewB
         }
     }
 
-    componentWillReceiveProps(nextProps: RX.Types.ViewProps) {
+    componentWillReceiveProps(nextProps: RX.Types.ViewPropsShared<C>) {
         if (!!this.props.onLayout !== !!nextProps.onLayout) {
             if (this.props.onLayout) {
                 this._checkViewCheckerUnbuild();
@@ -177,7 +178,7 @@ export abstract class ViewBase<P extends RX.Types.ViewProps, S> extends RX.ViewB
 
         if (ViewBase._viewCheckingList.length === 0) {
             if (ViewBase._viewCheckingTimer) {
-                clearInterval(ViewBase._viewCheckingTimer);
+                Timers.clearInterval(ViewBase._viewCheckingTimer);
                 ViewBase._viewCheckingTimer = undefined;
             }
 

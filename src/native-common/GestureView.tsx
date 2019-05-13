@@ -12,15 +12,16 @@
 import * as React from 'react';
 import * as RN from 'react-native';
 
-import { MacComponentAccessibilityProps } from './Accessibility';
-import AccessibilityUtil from './AccessibilityUtil';
 import App from '../native-common/App';
 import assert from '../common/assert';
-import EventHelpers from './utils/EventHelpers';
 import { Types } from '../common/Interfaces';
+import Timers from '../common/utils/Timers';
+
+import { MacComponentAccessibilityProps } from './Accessibility';
+import AccessibilityUtil from './AccessibilityUtil';
+import EventHelpers from './utils/EventHelpers';
 import { isUndefined } from './utils/lodashMini';
 import Platform from './Platform';
-import Timers from '../common/utils/Timers';
 import UserInterface from './UserInterface';
 import ViewBase from './ViewBase';
 
@@ -263,7 +264,7 @@ export abstract class GestureView extends React.Component<Types.GestureViewProps
     // Cancels any pending double-tap timer.
     private _cancelDoubleTapTimer() {
         if (this._doubleTapTimer) {
-            clearTimeout(this._doubleTapTimer);
+            Timers.clearTimeout(this._doubleTapTimer);
             this._doubleTapTimer = undefined;
         }
     }
@@ -279,7 +280,7 @@ export abstract class GestureView extends React.Component<Types.GestureViewProps
 
     private _cancelLongPressTimer() {
         if (this._longPressTimer) {
-            clearTimeout(this._longPressTimer);
+            Timers.clearTimeout(this._longPressTimer);
             this._longPressTimer = undefined;
         }
         this._pendingLongPressEvent = undefined;

@@ -14,6 +14,7 @@ import * as SyncTasks from 'synctasks';
 import assert from '../common/assert';
 import { DEFAULT_RESIZE_MODE } from '../common/Image';
 import { Types } from '../common/Interfaces';
+
 import * as _ from './utils/lodashMini';
 import restyleForInlineText from './utils/restyleForInlineText';
 import Styles from './Styles';
@@ -267,7 +268,7 @@ export class Image extends React.Component<Types.ImageProps, ImageState> {
 
     private _startXhrImageFetch(props: Types.ImageProps) {
         // Test hook to simulate a slower hxr request.
-        // window.setTimeout(() => this._actuallyStartXhrImageFetch(props), 2500);
+        // Timers.setTimeout(() => this._actuallyStartXhrImageFetch(props), 2500);
         this._actuallyStartXhrImageFetch(props);
     }
 

@@ -8,8 +8,9 @@
  * notifying when the transition is complete.
  */
 
-import * as _ from './../utils/lodashMini';
 import Timers from '../../common/utils/Timers';
+
+import * as _ from './../utils/lodashMini';
 
 export interface TransitionSpec {
     property: string;
@@ -68,7 +69,7 @@ export function executeTransition(element: HTMLElement, transitions: TransitionS
     let didFinish = false;
     finish = function() {
         if (!didFinish) {
-            clearTimeout(timeoutId);
+            Timers.clearTimeout(timeoutId);
 
             // Only complete the transition if we are ending the same transition it was initially set.
             // There are cases where transitions may be overriden before the transition ends.

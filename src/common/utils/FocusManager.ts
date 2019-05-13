@@ -14,6 +14,7 @@ import * as React from 'react';
 
 import AppConfig from '../../common/AppConfig';
 import { Types } from '../../common/Interfaces';
+
 import Timers from './Timers';
 
 let _lastComponentId = 0;
@@ -377,7 +378,7 @@ export abstract class FocusManager {
 
     private static _clearRestoreRestrictionTimeout() {
         if (FocusManager._restoreRestrictionTimer) {
-            clearTimeout(FocusManager._restoreRestrictionTimer);
+            Timers.clearTimeout(FocusManager._restoreRestrictionTimer);
             FocusManager._restoreRestrictionTimer = undefined;
             FocusManager._pendingPrevFocusedComponent = undefined;
         }

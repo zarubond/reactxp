@@ -14,9 +14,10 @@ import * as ReactDOM from 'react-dom';
 
 import AppConfig from '../common/AppConfig';
 import Easing from '../common/Easing';
+import * as RX from '../common/Interfaces';
+
 import { executeTransition, TransitionSpec } from './animated/executeTransition';
 import RXImage from './Image';
-import * as RX from '../common/Interfaces';
 import * as _ from './utils/lodashMini';
 import Styles from './Styles';
 import RXText from './Text';
@@ -39,6 +40,7 @@ const animatedPropUnits: { [key: string]: string } = {
     rotate: 'deg',
     rotateX: 'deg',
     rotateY: 'deg',
+    rotateZ: 'deg',
     scale: '',
     scaleX: '',
     scaleY: '',
@@ -242,35 +244,62 @@ export class InterpolatedValue extends Value {
         super._startTransition(toValue, duration, easing, delay, onEnd);
     }
 
+    _convertValueToNumeric(inputVal: number | string): number {
+        if (_.isNumber(inputVal)) {
+            return inputVal;
+        }
+
+        return parseInt(inputVal, 10);
+    }
+
+    _addUnitsToNumericValue(value: number, templateValue: number | string): number | string {
+        if (_.isNumber(templateValue)) {
+            return value;
+        }
+
+        // Does the template contain any of the common units?
+        const templateString = templateValue;
+        const commonUnits = ['deg', 'grad', 'rad'];
+        for (const unit of commonUnits) {
+            if (templateString.indexOf(unit) > 0) {
+                return value.toString() + unit;
+            }
+        }
+
+        return value;
+    }
+
     _getInterpolatedValue(inputVal: number | string): number | string {
         if (!this._interpolationConfig) {
             throw new Error('There is no interpolation config but one is required');
         }
 
-        if (!_.isNumber(inputVal)) {
-            throw new Error('Numeric inputVals required for interpolated values');
-        }
+        const numericInputValue = this._convertValueToNumeric(inputVal);
+        const outputValues = this._config.outputRange.map(value => {
+            return this._convertValueToNumeric(value);
+        });
 
-        if (this._interpolationConfig[inputVal]) {
-            return this._interpolationConfig[inputVal];
-        }
-
-        if (!_.isNumber(this._config.outputRange[0])) {
-            throw new Error('Non-transitional interpolations on web only supported as numerics');
+        if (this._interpolationConfig[numericInputValue]) {
+            return this._interpolationConfig[numericInputValue];
         }
 
         if (inputVal < this._config.inputRange[0]) {
-            return this._config.outputRange[0];
+            return outputValues[0];
         }
+
         for (let i = 1; i < this._config.inputRange.length; i++) {
             if (inputVal < this._config.inputRange[i]) {
-                const ratio = (inputVal - this._config.inputRange[i - 1]) /
+                const ratio = (numericInputValue - this._config.inputRange[i - 1]) /
                     (this._config.inputRange[i] - this._config.inputRange[i - 1]);
-                return (this._config.outputRange as number[])[i] * ratio +
-                    (this._config.outputRange as number[])[i - 1] * (1 - ratio);
+                return this._addUnitsToNumericValue(
+                    (this._config.outputRange as number[])[i] * ratio +
+                    (this._config.outputRange as number[])[i - 1] * (1 - ratio),
+                    inputVal);
             }
         }
-        return this._config.outputRange[this._config.inputRange.length - 1];
+        return this._addUnitsToNumericValue(
+            outputValues[this._config.inputRange.length - 1],
+            inputVal);
     }
 
     _isInterpolated(): boolean {
@@ -428,9 +457,9 @@ interface AnimatedAttribute {
 type AnimatedValueMap = { [transform: string]: AnimatedAttribute };
 
 // Function for creating wrapper AnimatedComponent around passed in component
-function createAnimatedComponent<PropsType extends RX.Types.CommonProps>(Component: any): any {
+function createAnimatedComponent<PropsType extends RX.Types.CommonProps<C>, C>(Component: any): any {
     class AnimatedComponentGenerated extends React.Component<PropsType, void>
-            implements RX.AnimatedComponent<PropsType, void>, ValueListener {
+            implements RX.AnimatedComponent<PropsType, void, C>, ValueListener {
 
         private _mountedComponent: any = null;
         private _propsWithoutStyle: any;
@@ -456,7 +485,7 @@ function createAnimatedComponent<PropsType extends RX.Types.CommonProps>(Compone
             }
         }
 
-        componentWillReceiveProps(props: RX.Types.CommonStyledProps<RX.Types.StyleRuleSet<Object>>) {
+        componentWillReceiveProps(props: RX.Types.CommonStyledProps<RX.Types.StyleRuleSet<Object>, C>) {
             this._updateStyles(props);
         }
 
@@ -718,10 +747,12 @@ function createAnimatedComponent<PropsType extends RX.Types.CommonProps>(Compone
             return transformList.join(' ');
         }
 
-        private _updateStyles(props: RX.Types.CommonStyledProps<RX.Types.StyleRuleSet<Object>>) {
+        // Typing of `any` on StyleRuleSet isn't desirable, but there's not accurate typings that can be used to represent
+        // our merging of web/RX styles here here
+        private _updateStyles(props: RX.Types.CommonStyledProps<RX.Types.StyleRuleSet<any>, C>) {
             this._propsWithoutStyle = _.omit(props, 'style');
 
-            const rawStyles = Styles.combine(props.style || {}) as any;
+            const rawStyles = Styles.combine(props.style || {});
             this._processedStyle = {};
 
             const newAnimatedAttributes: { [transform: string]: Value } = {};
@@ -881,7 +912,7 @@ function createAnimatedComponent<PropsType extends RX.Types.CommonProps>(Compone
     return AnimatedComponentGenerated;
 }
 
-export let Image = createAnimatedComponent<RX.Types.ImageProps>(RXImage) as typeof RX.AnimatedImage;
+export let Image = createAnimatedComponent(RXImage) as typeof RX.AnimatedImage;
 export let Text = createAnimatedComponent(RXText) as typeof RX.AnimatedText;
 export let TextInput = createAnimatedComponent(RXTextInput) as typeof RX.AnimatedTextInput;
 export let View = createAnimatedComponent(RXView) as typeof RX.AnimatedView;

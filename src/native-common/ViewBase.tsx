@@ -10,9 +10,11 @@
 import * as RN from 'react-native';
 
 import * as RX from '../common/Interfaces';
+
 import { isEqual } from './utils/lodashMini';
 
-export abstract class ViewBase<P extends RX.Types.ViewProps, S, T extends RN.View | RN.ScrollView> extends RX.ViewBase<P, S> {
+export abstract class ViewBase<P extends RX.Types.ViewPropsShared<C>, S, T extends RN.View | RN.ScrollView,
+        C extends RX.View | RX.ScrollView> extends RX.ViewBase<P, S> {
     private static _defaultViewStyle: RX.Types.ViewStyleRuleSet | undefined;
     private _layoutEventValues: RX.Types.ViewOnLayoutEvent | undefined;
 

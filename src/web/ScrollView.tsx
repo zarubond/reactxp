@@ -10,8 +10,10 @@
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 
-import CustomScrollbar from './CustomScrollbar';
 import * as RX from '../common/Interfaces';
+import Timers from '../common/utils/Timers';
+
+import CustomScrollbar from './CustomScrollbar';
 import * as _ from './utils/lodashMini';
 import ScrollViewConfig from './ScrollViewConfig';
 import Styles from './Styles';
@@ -76,7 +78,7 @@ const _customStyles = {
 // Default to once per frame.
 const _defaultScrollThrottleValue = 1000 / 60;
 
-export class ScrollView extends ViewBase<RX.Types.ScrollViewProps, RX.Types.Stateless> implements RX.ScrollView {
+export class ScrollView extends ViewBase<RX.Types.ScrollViewProps, RX.Types.Stateless, RX.ScrollView> implements RX.ScrollView {
     private _mountedComponent: HTMLElement | null = null;
 
     constructor(props: RX.Types.ScrollViewProps) {
@@ -341,7 +343,7 @@ export class ScrollView extends ViewBase<RX.Types.ScrollViewProps, RX.Types.Stat
                 const position = this._easeInOut(elapsedTime, start, change, duration);
                 container.scrollTop = position;
                 if (elapsedTime < duration) {
-                    setTimeout(function() {
+                    Timers.setTimeout(function() {
                         animateScroll(elapsedTime);
                     }, increment);
                 }
@@ -370,7 +372,7 @@ export class ScrollView extends ViewBase<RX.Types.ScrollViewProps, RX.Types.Stat
                 const position = this._easeInOut(elapsedTime, start, change, duration);
                 container.scrollLeft = position;
                 if (elapsedTime < duration) {
-                    setTimeout(function() {
+                    Timers.setTimeout(function() {
                         animateScroll(elapsedTime);
                     }, increment);
                 }

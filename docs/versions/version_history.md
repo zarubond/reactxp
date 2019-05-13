@@ -16,6 +16,60 @@ A new version of ReactXP will be released a monthly basis (approximately), follo
 
 ### Version History
 
+#### Version 2.0.0 of reactxp-virtuallistview - _6 Apr 2019_
+* #1073: Removed internal string-based refs with React.RefObject.
+
+#### Version 1.6.1 of reactxp - _23 Mar 2019_
+* #1062: Fixed TextInput defaultValue not working on native platforms
+* #1060: Fixed Ref<T> type.
+* #1058: Fixed ref assert on Windows.
+
+#### Version 1.6.1 of reactxp-video - _23 Mar 2019_
+* #1066: Fixed video extension to support react-native local assets.
+
+#### Version 1.6.1 of reactxp-navigation - _23 Mar 2019_
+* #1063: Fixed regression in reactxp-navigation.
+
+#### Version 1.6.0 of reactxp-imagesvg, reactxp-navigation, reactxp-video - _16 Mar 2019_
+* No new features; updated dependencies.
+
+#### Version 1.6.0 of reactxp - _16 Mar 2019_
+* No new features; updated dependencies.
+
+#### Version 1.6.0-rc.4 of reactxp - _15 Mar 2019_
+* #1055: Fixed crash due to incompatibilty with newly-released RN 59.
+
+#### Version 1.6.0-rc.3 of reactxp - _10 Mar 2019_
+* #891: Fixed bad interaction between RX.Clipboard.getText() and iOS Safari.
+
+#### Version 1.6.0-rc.2 of reactxp - _9 Mar 2019_
+* #1041: Fixed textDecorationStyle and textDecorationColor on web.
+* #1042: Fixed transform rotate styles on web so they take a unit (e.g. "deg") for consistency with RN.
+* #1040: Fixed auto-dismissing popups on the web.
+* #1026: Changed margin and padding style combination rules on web to match RN.
+
+#### Version 1.6.0-rc.1 of reactxp - _17 Feb 2019_
+* #961: Fixed crash when calling setScrollTop/Left on native version of ScrollView.
+* #972: If blurOnSubmit is specified on a TextInput, the code now respects that value.
+* #974: Fixed bug in native Button implementation where 'false' style would be passed when disableTouchOpacityAnimation was specified.
+* #980: Fixed bug in web implementation of onLongPress.
+* #976: Made multiline TextInput growth behavior on web match native.
+* #984: Added code to catch exception in web implementation of Storage.setItem method.
+* #996: Added stronger typings for ref callbacks.
+* #993: Added support for mediaPlaybackRequiresUserAction and allowsInlinedMediaPlayer props for WebView.
+* #957: Added context mode to the popup container handling type list.
+* #994: Removed msHyphens css property in web implementation of Text.
+* #1001: Fixed units for rotateZ translation type for web animations.
+* #1004: Fixed bug that resulted in crash when ReactXP ran in node (test) environment.
+* #1006: Made selectItemKey scrollTo behaviour configurable - scrolling isn't always desired.
+* #1016: View responder events props are now triggered properly.
+* #1024: Added more mouse cursor types for web version of GestureView.
+* Added support for interpolated animation values that have angle units (e.g. "90deg") on web.
+
+#### Version 2.0.0-rc.3 of reactxp-virtuallistview - _30 Jan 2019_
+* #1006: Make selectItemKey scrollTo behaviour configurable - scrolling isn't always desired
+* #1007: Perf Improvements
+
 #### Version 2.0.0-rc.2 of reactxp-virtuallistview - _15 Jan 2019_
 * #989: Auto-scroll VLV on mount when initialScrollKey prop is provided
 * #989: Fix keyboard scrolling bugs when non-keyboard-navigable items are interspersed with keyboard-navigable items

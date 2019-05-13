@@ -4,9 +4,17 @@ npm-debug.log
 yarn-error.log
 
 /.cache-loader/
-package-lock.json
 
 temp/
+
+# Android/IntelliJ
+#
+build/
+.idea
+.gradle
+local.properties
+*.iml
+
 
 # Certificate information for node webserver
 cert.pem

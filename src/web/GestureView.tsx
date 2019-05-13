@@ -12,13 +12,15 @@ import * as PropTypes from 'prop-types';
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 
-import AccessibilityUtil from './AccessibilityUtil';
 import { Types } from '../common/Interfaces';
+import Timers from '../common/utils/Timers';
+
+import AccessibilityUtil from './AccessibilityUtil';
 import { clone, isUndefined } from './utils/lodashMini';
 import MouseResponder, { MouseResponderSubscription } from './utils/MouseResponder';
 import Styles from './Styles';
-import Timers from '../common/utils/Timers';
 
+// Cast to any to allow merging of web and RX styles
 const _styles = {
     defaultView: {
         position: 'relative',
@@ -29,7 +31,7 @@ const _styles = {
         overflow: 'hidden',
         alignItems: 'stretch',
         justifyContent: 'center'
-    }
+    } as any
 };
 
 const _longPressDurationThreshold = 750;
@@ -203,7 +205,7 @@ export class GestureView extends React.Component<Types.GestureViewProps, Types.S
     }
 
     private _getStyles(): any {
-        const combinedStyles = Styles.combine([_styles.defaultView, this.props.style]) as any;
+        const combinedStyles = Styles.combine([_styles.defaultView, this.props.style]);
 
         let cursorName: string | undefined;
         switch (this.props.mouseOverCursor) {
@@ -217,6 +219,34 @@ export class GestureView extends React.Component<Types.GestureViewProps, Types.S
 
             case Types.GestureMouseCursor.Pointer:
                 cursorName = 'pointer';
+                break;
+
+            case Types.GestureMouseCursor.NSResize:
+                cursorName = 'ns-resize';
+                break;
+
+            case Types.GestureMouseCursor.EWResize:
+                cursorName = 'ew-resize';
+                break;
+
+            case Types.GestureMouseCursor.NESWResize:
+                cursorName = 'nesw-resize';
+                break;
+
+            case Types.GestureMouseCursor.NWSEResize:
+                cursorName = 'nwse-resize';
+                break;
+
+            case Types.GestureMouseCursor.NotAllowed:
+                cursorName = 'not-allowed';
+                break;
+
+            case Types.GestureMouseCursor.ZoomIn:
+                cursorName = 'zoom-in';
+                break;
+
+            case Types.GestureMouseCursor.ZoomOut:
+                cursorName = 'zoom-out';
                 break;
         }
 
@@ -407,7 +437,7 @@ export class GestureView extends React.Component<Types.GestureViewProps, Types.S
 
     private _cancelLongPressTimer() {
         if (this._longPressTimer) {
-            clearTimeout(this._longPressTimer);
+            Timers.clearTimeout(this._longPressTimer);
             this._longPressTimer = undefined;
         }
         this._pendingLongPressEvent = undefined;
@@ -426,7 +456,7 @@ export class GestureView extends React.Component<Types.GestureViewProps, Types.S
     // Cancels any pending double-tap timer.
     private _cancelDoubleTapTimer() {
         if (this._doubleTapTimer) {
-            clearTimeout(this._doubleTapTimer);
+            Timers.clearTimeout(this._doubleTapTimer);
             this._doubleTapTimer = undefined;
         }
     }

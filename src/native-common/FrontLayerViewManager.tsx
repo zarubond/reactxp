@@ -13,8 +13,10 @@ import * as RN from 'react-native';
 import SubscribableEvent from 'subscribableevent';
 
 import { Types } from '../common/Interfaces';
-import * as _ from './utils/lodashMini';
 import { ModalContainer } from '../native-common/ModalContainer';
+import Timers from '../common/utils/Timers';
+
+import * as _ from './utils/lodashMini';
 import PopupContainerView from './PopupContainerView';
 
 class ModalStackContext {
@@ -242,7 +244,7 @@ export class FrontLayerViewManager {
                             // UI making it not doing one of the two animations (i.e.: Opening an actionsheet
                             // while dismissing a popup). We introduce this delay to make sure the popup
                             // dimissing animation has finished before we call the event handler.
-                            setTimeout(() => { activePopupContext.popupOptions.onAnchorPressed!(e); }, 500);
+                            Timers.setTimeout(() => { activePopupContext.popupOptions.onAnchorPressed!(e); }, 500);
                         }
                     }
                 );

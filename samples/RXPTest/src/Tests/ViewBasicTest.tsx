@@ -16,13 +16,20 @@ const _styles = {
     }),
     view1: RX.Styles.createViewStyle({
         margin: 20,
-        backgroundColor: '#ccf'
+        backgroundColor: '#ccf',
+        transform: [{
+            rotate: '5deg'
+        }]
     }),
     view2: RX.Styles.createViewStyle({
         margin: 20,
         backgroundColor: 'orange',
         borderWidth: 2,
         borderColor: 'black'
+    }),
+    view2MarginOverride: RX.Styles.createViewStyle({
+        marginLeft: 30,
+        marginRight: 10
     }),
     view3: RX.Styles.createViewStyle({
         margin: 20,
@@ -155,7 +162,7 @@ class BasicView extends RX.Component<RX.CommonProps, RX.Stateless> {
                     underlayColor={ '#fee' }
                     tabIndex={ 3 }
                 >
-                    <RX.Text style={ _styles.labelText }>
+                    <RX.Text style={ [_styles.view2MarginOverride, _styles.labelText] }>
                         { 'Press me' }
                     </RX.Text>
                 </RX.View>

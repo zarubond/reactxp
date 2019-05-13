@@ -13,21 +13,23 @@ import * as PropTypes from 'prop-types';
 import * as React from 'react';
 import * as ReactDOM from 'react-dom';
 
+import { Types } from '../common/Interfaces';
+import { recalcPositionFromLayoutData, RecalcResult } from '../common/PopupContainerViewBase';
+import Timers from '../common/utils/Timers';
+
 import AccessibilityAnnouncer from './AccessibilityAnnouncer';
 import FocusManager from './utils/FocusManager';
 import Input from './Input';
-import { Types } from '../common/Interfaces';
 import * as _ from './utils/lodashMini';
 import ModalContainer from './ModalContainer';
 import PopupContainerView from './PopupContainerView';
-import Timers from '../common/utils/Timers';
 import UserInterface from './UserInterface';
 
 export class PopupDescriptor {
     constructor(public popupId: string, public popupOptions: Types.PopupOptions) {}
 }
 
-export interface RootViewProps extends Types.CommonProps {
+export interface RootViewProps extends Types.CommonProps<RootView> {
     mainView?: React.ReactNode;
     modal?: React.ReactElement<Types.ViewProps>;
     activePopup?: PopupDescriptor;
@@ -40,7 +42,7 @@ export interface RootViewProps extends Types.CommonProps {
     writingDirection?: 'auto' | 'rtl' | 'ltr';
 }
 
-export interface RootViewState {
+export interface RootViewState extends RecalcResult {
     // We need to measure the popup before it can be positioned. This indicates that we're in the "measuring" phase.
     isMeasuringPopup: boolean;
 
@@ -48,30 +50,9 @@ export interface RootViewState {
     popupWidth: number;
     popupHeight: number;
 
-    // Position of popup relative to its anchor (top, bottom, left, right)
-    anchorPosition: Types.PopupPosition;
-
-    // Top or left offset of the popup relative to the center of the anchor
-    anchorOffset: number;
-
-    // Absolute window location of the popup
-    popupTop: number;
-    popupLeft: number;
-
-    // Constrained dimensions of the popup once it is placed
-    constrainedPopupWidth: number;
-    constrainedPopupHeight: number;
-
     // Assign css focus class if focus is due to Keyboard or mouse
     focusClass: string | undefined;
 }
-
-// Width of the "alley" around popups so they don't get too close to the boundary of the window.
-const _popupAlleyWidth = 8;
-
-// How close to the edge of the popup should we allow the anchor offset to get before
-// attempting a different position?
-const _minAnchorOffset = 16;
 
 // Button code for when right click is pressed in a mouse event
 const _rightClickButtonCode = 2;
@@ -95,7 +76,7 @@ export interface MainViewContext {
 // This helper class wraps the main view and passes a boolean value
 // "isInRxMainView" to all children found within it. This is used to
 // prevent gesture handling within the main view when a modal is displayed.
-export class MainViewContainer extends React.Component<Types.CommonProps, Types.Stateless>
+export class MainViewContainer extends React.Component<Types.CommonProps<MainViewContainer>, Types.Stateless>
         implements React.ChildContextProvider<MainViewContext> {
     static childContextTypes: React.ValidationMap<any> = {
         isInRxMainView: PropTypes.bool
@@ -155,8 +136,8 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
             isMeasuringPopup: true,
             anchorPosition: 'left',
             anchorOffset: 0,
-            popupTop: 0,
-            popupLeft: 0,
+            popupY: 0,
+            popupX: 0,
             popupWidth: 0,
             popupHeight: 0,
             constrainedPopupWidth: 0,
@@ -182,6 +163,8 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
             if (!this._respositionPopupTimer) {
                 this._startRepositionPopupTimer();
             }
+
+            this._startHidePopupTimer();
 
             if (!this._clickHandlerInstalled) {
                 document.addEventListener('mousedown', this._tryClosePopup);
@@ -246,8 +229,8 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
         };
 
         if (!hidden) {
-            popupContainerStyle.top = this.state.popupTop;
-            popupContainerStyle.left = this.state.popupLeft;
+            popupContainerStyle.top = this.state.popupY;
+            popupContainerStyle.left = this.state.popupX;
 
             // Are we artificially constraining the width and/or height?
             if (this.state.constrainedPopupWidth && this.state.constrainedPopupWidth !== this.state.popupWidth) {
@@ -346,12 +329,12 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
             _.defer(() => {
                 if (this.props.activePopup) {
                     const anchorReference = this.props.activePopup.popupOptions.getAnchor();
-                    const isClickOnAnchor = this._determineIfClickOnElement(anchorReference, e.srcElement);
+                    const isClickOnAnchor = this._determineIfClickOnElement(anchorReference, e.srcElement as Element);
 
                     let isClickOnContainer = false;
                     if (!isClickOnAnchor && this.props.activePopup.popupOptions.getElementTriggeringPopup) {
                         const containerRef = this.props.activePopup.popupOptions.getElementTriggeringPopup();
-                        isClickOnContainer = this._determineIfClickOnElement(containerRef, e.srcElement);
+                        isClickOnContainer = this._determineIfClickOnElement(containerRef, e.srcElement as Element);
                     }
 
                     if (isClickOnAnchor || isClickOnContainer) {
@@ -360,7 +343,7 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
                         // two animations (i.e.: Opening an actionsheet while dismissing a popup). We introduce this delay to make sure
                         // the popup dimissing animation has finished before we call the event handler.
                         if (this.props.activePopup.popupOptions.onAnchorPressed) {
-                            setTimeout(() => {
+                            Timers.setTimeout(() => {
                                 // We can't pass through the DOM event argument to the anchor event handler as the event we have at this
                                 // point is a DOM Event and the anchor expect a Synthetic event. There doesn't seem to be any way to convert
                                 // between them. Passing null for now.
@@ -421,10 +404,10 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
             const activeElement = document.activeElement;
 
             if (this._isNavigatingWithKeyboardUpateTimer) {
-                clearTimeout(this._isNavigatingWithKeyboardUpateTimer);
+                Timers.clearTimeout(this._isNavigatingWithKeyboardUpateTimer);
             }
 
-            this._isNavigatingWithKeyboardUpateTimer = window.setTimeout(() => {
+            this._isNavigatingWithKeyboardUpateTimer = Timers.setTimeout(() => {
                 this._isNavigatingWithKeyboardUpateTimer = undefined;
 
                 if ((document.activeElement === activeElement) && activeElement && (activeElement !== document.body)) {
@@ -445,7 +428,7 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
         const target = e.target as HTMLElement;
 
         if (this._updateKeyboardNavigationModeOnFocusTimer) {
-            clearTimeout(this._updateKeyboardNavigationModeOnFocusTimer);
+            Timers.clearTimeout(this._updateKeyboardNavigationModeOnFocusTimer);
         }
 
         this._updateKeyboardNavigationModeOnFocusTimer = Timers.setTimeout(() => {
@@ -492,14 +475,14 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
 
     private _cancelApplicationIsNotActive() {
         if (this._applicationIsNotActiveTimer) {
-            clearTimeout(this._applicationIsNotActiveTimer);
+            Timers.clearTimeout(this._applicationIsNotActiveTimer);
             this._applicationIsNotActiveTimer = undefined;
         }
     }
 
     private _updateKeyboardNavigationState(isNavigatingWithKeyboard: boolean) {
         if (this._isNavigatingWithKeyboardUpateTimer) {
-            clearTimeout(this._isNavigatingWithKeyboardUpateTimer);
+            Timers.clearTimeout(this._isNavigatingWithKeyboardUpateTimer);
             this._isNavigatingWithKeyboardUpateTimer = undefined;
         }
 
@@ -542,7 +525,7 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
         if (this.props.autoDismiss) {
             // Should we immediately hide it, or did the caller request a delay?
             if (!_.isUndefined(this.props.autoDismissDelay) && this.props.autoDismissDelay > 0) {
-                this._hidePopupTimer = window.setTimeout(() => {
+                this._hidePopupTimer = Timers.setTimeout(() => {
                     this._hidePopupTimer = undefined;
                     this._dismissPopup();
                 }, this.props.autoDismissDelay);
@@ -554,7 +537,7 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
 
     private _stopHidePopupTimer() {
         if (this._hidePopupTimer) {
-            clearTimeout(this._hidePopupTimer);
+            Timers.clearTimeout(this._hidePopupTimer);
             this._hidePopupTimer = undefined;
         }
     }
@@ -573,7 +556,7 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
 
     private _stopRepositionPopupTimer() {
         if (this._respositionPopupTimer) {
-            clearInterval(this._respositionPopupTimer);
+            Timers.clearInterval(this._respositionPopupTimer);
             this._respositionPopupTimer = undefined;
         }
     }
@@ -618,185 +601,23 @@ export class RootView extends React.Component<RootViewProps, RootViewState> {
             return;
         }
 
-        // Start by assuming that we'll be unconstrained.
-        newState.constrainedPopupHeight = newState.popupHeight;
-        newState.constrainedPopupWidth = newState.popupWidth;
-
-        // Get the width/height of the full window.
-        const windowHeight = window.innerHeight;
-        const windowWidth = window.innerWidth;
-
         // Calculate the absolute position of the anchor element's top/left.
         const anchorRect = anchor.getBoundingClientRect();
 
-        // If the anchor is no longer in the window's bounds, cancel the popup.
-        if (anchorRect.left >= windowWidth || anchorRect.right <= 0 ||
-                anchorRect.bottom <= 0 || anchorRect.top >= windowHeight) {
+        const popupDims = { width: newState.popupWidth, height: newState.popupHeight };
+
+        // Get the width/height of root view window.
+        const windowDims = { width: window.innerWidth, height: window.innerHeight };
+
+        // Run the common recalc function and see what magic it spits out.
+        const result = recalcPositionFromLayoutData(windowDims, anchorRect, popupDims,
+            this.props.activePopup!.popupOptions.positionPriorities, this.props.activePopup!.popupOptions.useInnerPositioning);
+        if (!result) {
             this._dismissPopup();
             return;
         }
 
-        let positionsToTry = this.props.activePopup!.popupOptions.positionPriorities;
-        if (!positionsToTry || positionsToTry.length === 0) {
-            positionsToTry = ['bottom', 'right', 'top', 'left'];
-        }
-
-        if (this.props.activePopup!.popupOptions.useInnerPositioning) {
-            // If the popup is meant to be shown inside the anchor we need to recalculate
-            // the position differently.
-            this._recalcInnerPosition(anchorRect, newState);
-            return;
-        }
-
-        let foundPerfectFit = false;
-        let foundPartialFit = false;
-        positionsToTry.forEach(pos => {
-            if (!foundPerfectFit) {
-                let absLeft = 0;
-                let absTop = 0;
-                let anchorOffset = 0;
-                let constrainedWidth = 0;
-                let constrainedHeight = 0;
-
-                switch (pos) {
-                    case 'bottom':
-                        absTop = anchorRect.bottom;
-                        absLeft = anchorRect.left + (anchorRect.width - newState.popupWidth) / 2;
-                        anchorOffset = newState.popupWidth / 2;
-
-                        if (newState.popupHeight <= windowHeight - _popupAlleyWidth - anchorRect.bottom) {
-                            foundPerfectFit = true;
-                        } else if (!foundPartialFit) {
-                            constrainedHeight = windowHeight - _popupAlleyWidth - anchorRect.bottom;
-                        }
-                        break;
-
-                    case 'top':
-                        absTop = anchorRect.top - newState.popupHeight;
-                        absLeft = anchorRect.left + (anchorRect.width - newState.popupWidth) / 2;
-                        anchorOffset = newState.popupWidth / 2;
-
-                        if (newState.popupHeight <= anchorRect.top - _popupAlleyWidth) {
-                            foundPerfectFit = true;
-                        } else if (!foundPartialFit) {
-                            constrainedHeight = anchorRect.top - _popupAlleyWidth;
-                        }
-                        break;
-
-                    case 'right':
-                        absLeft = anchorRect.right;
-                        absTop = anchorRect.top + (anchorRect.height - newState.popupHeight) / 2;
-                        anchorOffset = newState.popupHeight / 2;
-
-                        if (newState.popupWidth <= windowWidth - _popupAlleyWidth - anchorRect.right) {
-                            foundPerfectFit = true;
-                        } else if (!foundPartialFit) {
-                            constrainedWidth = windowWidth - _popupAlleyWidth - anchorRect.right;
-                        }
-                        break;
-
-                    case 'left':
-                        absLeft = anchorRect.left - newState.popupWidth;
-                        absTop = anchorRect.top + (anchorRect.height - newState.popupHeight) / 2;
-                        anchorOffset = newState.popupHeight / 2;
-
-                        if (newState.popupWidth <= anchorRect.left - _popupAlleyWidth) {
-                            foundPerfectFit = true;
-                        } else if (!foundPartialFit) {
-                            constrainedWidth = anchorRect.left - _popupAlleyWidth;
-                        }
-                        break;
-                }
-
-                const effectiveWidth = constrainedWidth || newState.popupWidth;
-                const effectiveHeight = constrainedHeight || newState.popupHeight;
-
-                // Make sure we're not hanging off the bounds of the window.
-                if (absLeft < _popupAlleyWidth) {
-                    if (pos === 'top' || pos === 'bottom') {
-                        anchorOffset -= _popupAlleyWidth - absLeft;
-                        if (anchorOffset < _minAnchorOffset || anchorOffset > effectiveWidth - _minAnchorOffset) {
-                            foundPerfectFit = false;
-                        }
-                    }
-                    absLeft = _popupAlleyWidth;
-                } else if (absLeft > windowWidth - _popupAlleyWidth - effectiveWidth) {
-                    if (pos === 'top' || pos === 'bottom') {
-                        anchorOffset -= (windowWidth - _popupAlleyWidth - effectiveWidth - absLeft);
-                        if (anchorOffset < _minAnchorOffset || anchorOffset > effectiveWidth - _minAnchorOffset) {
-                            foundPerfectFit = false;
-                        }
-                    }
-                    absLeft = windowWidth - _popupAlleyWidth - effectiveWidth;
-                }
-
-                if (absTop < _popupAlleyWidth) {
-                    if (pos === 'right' || pos === 'left') {
-                        anchorOffset += absTop - _popupAlleyWidth;
-                        if (anchorOffset < _minAnchorOffset || anchorOffset > effectiveHeight - _minAnchorOffset) {
-                            foundPerfectFit = false;
-                        }
-                    }
-                    absTop = _popupAlleyWidth;
-                } else if (absTop > windowHeight - _popupAlleyWidth - effectiveHeight) {
-                    if (pos === 'right' || pos === 'left') {
-                        anchorOffset -= (windowHeight - _popupAlleyWidth - effectiveHeight - absTop);
-                        if (anchorOffset < _minAnchorOffset || anchorOffset > effectiveHeight - _minAnchorOffset) {
-                            foundPerfectFit = false;
-                        }
-                    }
-                    absTop = windowHeight - _popupAlleyWidth - effectiveHeight;
-                }
-
-                if (foundPerfectFit || effectiveHeight > 0 || effectiveWidth > 0) {
-                    newState.popupTop = absTop;
-                    newState.popupLeft = absLeft;
-                    newState.anchorOffset = anchorOffset;
-                    newState.anchorPosition = pos;
-                    newState.constrainedPopupWidth = effectiveWidth;
-                    newState.constrainedPopupHeight = effectiveHeight;
-
-                    foundPartialFit = true;
-                }
-            }
-        });
-
-        if (!_.isEqual(newState, this.state)) {
-            this.setState(newState);
-        }
-    }
-
-    private _recalcInnerPosition(anchorRect: ClientRect, newState: RootViewState) {
-        // For inner popups we only accept the first position of the priorities since there should always be room for the bubble.
-        const pos = this.props.activePopup!.popupOptions.positionPriorities![0];
-
-        switch (pos) {
-            case 'top':
-                newState.popupTop = anchorRect.top + anchorRect.height - newState.constrainedPopupHeight;
-                newState.popupLeft = anchorRect.left + anchorRect.height / 2 - newState.constrainedPopupWidth / 2;
-                newState.anchorOffset = newState.popupWidth / 2;
-                break;
-
-            case 'bottom':
-                newState.popupTop = anchorRect.top + newState.constrainedPopupHeight;
-                newState.popupLeft = anchorRect.left + anchorRect.height / 2 - newState.constrainedPopupWidth / 2;
-                newState.anchorOffset = newState.popupWidth / 2;
-                break;
-
-            case 'left':
-                newState.popupTop = anchorRect.top + anchorRect.height / 2 - newState.constrainedPopupHeight / 2;
-                newState.popupLeft = anchorRect.left + anchorRect.width - newState.constrainedPopupWidth;
-                newState.anchorOffset = newState.popupHeight / 2;
-                break;
-
-            case 'right':
-                newState.popupTop = anchorRect.top + anchorRect.height / 2 - newState.constrainedPopupHeight / 2;
-                newState.popupLeft = anchorRect.left;
-                newState.anchorOffset = newState.popupHeight / 2;
-                break;
-        }
-
-        newState.anchorPosition = pos;
+        _.extend(newState, result);
 
         if (!_.isEqual(newState, this.state)) {
             this.setState(newState);

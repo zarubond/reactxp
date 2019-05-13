@@ -11,18 +11,19 @@ import * as PropTypes from 'prop-types';
 import * as React from 'react';
 import * as RN from 'react-native';
 
+import assert from '../common/assert';
+import { FocusArbitratorProvider } from '../common/utils/AutoFocusHelper';
+import * as RX from '../common/Interfaces';
+import Timers from '../common/utils/Timers';
+
 import { MacComponentAccessibilityProps } from './Accessibility';
 import AccessibilityUtil from './AccessibilityUtil';
 import Animated from './Animated';
 import App from './App';
-import assert from '../common/assert';
-import { FocusArbitratorProvider } from '../common/utils/AutoFocusHelper';
 import EventHelpers from './utils/EventHelpers';
-import { Types } from '../common/Interfaces';
 import { clone, extend } from './utils/lodashMini';
 import Platform from './Platform';
 import Styles from './Styles';
-import Timers from '../common/utils/Timers';
 import UserInterface from './UserInterface';
 import ViewBase from './ViewBase';
 
@@ -43,7 +44,7 @@ function noop() { /* noop */ }
 
 function applyMixin(thisObj: any, mixin: {[propertyName: string]: any}, propertiesToSkip: string[]) {
     Object.getOwnPropertyNames(mixin).forEach(name => {
-        if (name !== 'constructor' && propertiesToSkip.indexOf(name) === -1) {
+        if (name !== 'constructor' && propertiesToSkip.indexOf(name) === -1 && typeof mixin[name].bind === 'function') {
             assert(
                 !(name in thisObj),
                 `An object cannot have a method with the same name as one of its mixins: "${name}"`
@@ -128,7 +129,7 @@ export interface ViewContext {
     focusArbitrator?: FocusArbitratorProvider;
 }
 
-export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
+export class View extends ViewBase<RX.Types.ViewProps, RX.Types.Stateless, RN.View, RX.View> {
     static contextTypes: React.ValidationMap<any> = {
         focusArbitrator: PropTypes.object
     };
@@ -160,11 +161,11 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
     private _hideTimeout: number | undefined;
     private _defaultOpacityValue: number | undefined;
     private _opacityAnimatedValue: RN.Animated.Value | undefined;
-    private _opacityAnimatedStyle: Types.AnimatedViewStyleRuleSet | undefined;
+    private _opacityAnimatedStyle: RX.Types.AnimatedViewStyleRuleSet | undefined;
 
     private _focusArbitratorProvider: FocusArbitratorProvider | undefined;
 
-    constructor(props: Types.ViewProps, context: ViewContext) {
+    constructor(props: RX.Types.ViewProps, context?: ViewContext) {
         super(props, context);
         this._updateMixin(props, true);
         this._buildInternalProps(props);
@@ -174,7 +175,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
         }
     }
 
-    componentWillReceiveProps(nextProps: Types.ViewProps) {
+    componentWillReceiveProps(nextProps: RX.Types.ViewProps) {
         this._updateMixin(nextProps, false);
         this._buildInternalProps(nextProps);
 
@@ -183,7 +184,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
         }
     }
 
-    componentWillUpdate(nextProps: Types.ViewProps, nextState: {}) {
+    componentWillUpdate(nextProps: RX.Types.ViewProps, nextState: {}) {
         //
         // Exit fast if not an "animated children" case
         if (!(nextProps.animateChildEnter || nextProps.animateChildMove || nextProps.animateChildLeave)) {
@@ -260,7 +261,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
         }
     }
 
-    private _updateMixin(props: Types.ViewProps, initial: boolean) {
+    private _updateMixin(props: RX.Types.ViewProps, initial: boolean) {
         const isButton = this._isButton(props);
         if (isButton && !this._mixinIsApplied) {
             // Create local handlers
@@ -323,7 +324,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
      * be careful with setting any non layout properties unconditionally in this method to any value
      * as on android that would lead to extra layers of Views.
      */
-    protected _buildInternalProps(props: Types.ViewProps) {
+    protected _buildInternalProps(props: RX.Types.ViewProps) {
         this._internalProps = clone(props) as any;
         this._internalProps.ref = this._setNativeComponent;
 
@@ -335,7 +336,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
 
         // Translate accessibilityProps from RX to RN, there are type diferrences for example:
         // accessibilityLiveRegion prop is number (RX.Types.AccessibilityLiveRegion) in RX, but
-        // string is expected by RN.View.
+        // string is expected by RN.View
         const accessibilityProps = {
             importantForAccessibility: AccessibilityUtil.importantForAccessibilityToString(props.importantForAccessibility),
             accessibilityLabel: props.accessibilityLabel || props.title,
@@ -376,12 +377,12 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
         this._internalProps.style = baseStyle;
         if (this._mixinIsApplied) {
             const responderProps = {
-                onStartShouldSetResponder: this.touchableHandleStartShouldSetResponder,
-                onResponderTerminationRequest: this.touchableHandleResponderTerminationRequest,
-                onResponderGrant: this.touchableHandleResponderGrant,
-                onResponderMove: this.touchableHandleResponderMove,
-                onResponderRelease: this.touchableHandleResponderRelease,
-                onResponderTerminate: this.touchableHandleResponderTerminate
+                onStartShouldSetResponder: this.props.onStartShouldSetResponder || this.touchableHandleStartShouldSetResponder,
+                onResponderTerminationRequest: this.props.onResponderTerminationRequest || this.touchableHandleResponderTerminationRequest,
+                onResponderGrant: this.props.onResponderGrant || this.touchableHandleResponderGrant,
+                onResponderMove: this.props.onResponderMove || this.touchableHandleResponderMove,
+                onResponderRelease: this.props.onResponderRelease || this.touchableHandleResponderRelease,
+                onResponderTerminate: this.props.onResponderTerminate || this.touchableHandleResponderTerminate
             };
             this._internalProps = extend(this._internalProps, responderProps);
 
@@ -423,7 +424,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
         this._setOpacityTo(this._defaultOpacityValue!, duration);
     }
 
-    private _getDefaultOpacityValue(props: Types.ViewProps): number {
+    private _getDefaultOpacityValue(props: RX.Types.ViewProps): number {
         let flattenedStyles: { [key: string]: any } | undefined;
         if (props && props.style) {
             flattenedStyles = RN.StyleSheet.flatten(props.style as RN.StyleProp<RN.ViewStyle>);
@@ -467,11 +468,11 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
         });
     }
 
-    protected _isButton(viewProps: Types.ViewProps): boolean {
+    protected _isButton(viewProps: RX.Types.ViewProps): boolean {
         return !!(viewProps.onPress || viewProps.onLongPress);
     }
 
-    private _updateFocusArbitratorProvider(props: Types.ViewProps) {
+    private _updateFocusArbitratorProvider(props: RX.Types.ViewProps) {
         if (props.arbitrateFocus) {
             if (this._focusArbitratorProvider) {
                 this._focusArbitratorProvider.setCallback(props.arbitrateFocus);
@@ -499,7 +500,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
         );
     }
 
-    touchableHandlePress(e: Types.SyntheticEvent): void {
+    touchableHandlePress(e: RX.Types.SyntheticEvent): void {
         UserInterface.evaluateTouchLatency(e);
         if (EventHelpers.isRightMouseButton(e)) {
             if (this.props.onContextMenu) {
@@ -512,7 +513,7 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
         }
     }
 
-    touchableHandleLongPress(e: Types.SyntheticEvent): void {
+    touchableHandleLongPress(e: RX.Types.SyntheticEvent): void {
         if (!EventHelpers.isRightMouseButton(e)) {
             if (this.props.onLongPress) {
                 this.props.onLongPress(EventHelpers.toMouseEvent(e));
@@ -520,11 +521,11 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
         }
     }
 
-    touchableHandleActivePressIn(e: Types.SyntheticEvent): void {
+    touchableHandleActivePressIn(e: RX.Types.SyntheticEvent): void {
         if (this._isTouchFeedbackApplicable()) {
             if (this.props.underlayColor) {
                 if (this._hideTimeout) {
-                    clearTimeout(this._hideTimeout);
+                    Timers.clearTimeout(this._hideTimeout);
                     this._hideTimeout = undefined;
                 }
                 this._showUnderlay();
@@ -537,11 +538,11 @@ export class View extends ViewBase<Types.ViewProps, Types.Stateless, RN.View> {
         }
     }
 
-    touchableHandleActivePressOut(e: Types.SyntheticEvent): void {
+    touchableHandleActivePressOut(e: RX.Types.SyntheticEvent): void {
         if (this._isTouchFeedbackApplicable()) {
             if (this.props.underlayColor) {
                 if (this._hideTimeout) {
-                    clearTimeout(this._hideTimeout);
+                    Timers.clearTimeout(this._hideTimeout);
                 }
                 this._hideTimeout = Timers.setTimeout(this._hideUnderlay, _hideUnderlayTimeout);
             }

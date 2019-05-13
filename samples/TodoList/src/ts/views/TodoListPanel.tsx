@@ -8,6 +8,7 @@
 import * as _ from 'lodash';
 import * as RX from 'reactxp';
 import { VirtualListView, VirtualListViewItemInfo } from 'reactxp-virtuallistview';
+import { VirtualListCellRenderDetails } from 'reactxp-virtuallistview/dist/VirtualListCell';
 import { ComponentBase } from 'resub';
 
 import AppConfig from '../app/AppConfig';
@@ -161,7 +162,8 @@ export default class TodoListPanel extends ComponentBase<TodoListPanelProps, Tod
         });
     }
 
-    private _renderItem = (item: TodoListItemInfo, hasFocus?: boolean) => {
+    private _renderItem = (details: VirtualListCellRenderDetails<TodoListItemInfo>) => {
+        const item = details.item;
         return (
             <TodoListItem
                 todo={ item.todo }
@@ -173,8 +175,8 @@ export default class TodoListPanel extends ComponentBase<TodoListPanelProps, Tod
         );
     };
 
-    private _onPressTodo = (todo: Todo) => {
-        this.props.onSelect(todo.id);
+    private _onPressTodo = (todoId: string) => {
+        this.props.onSelect(todoId);
         this.setState({
             searchString: '',
             filteredTodoList: this.state.todos
